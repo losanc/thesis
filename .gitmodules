@@ -1,0 +1,3 @@
+[submodule "nalgebra"]
+	path = nalgebra
+	url = https://github.com/losanc/nalgebra.git
