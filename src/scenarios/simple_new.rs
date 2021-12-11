@@ -9,9 +9,9 @@ use nalgebra_sparse as nas;
 use nas::{CooMatrix, CsrMatrix};
 use num::{One, Zero};
 use optimization::Problem;
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::string::String;
-use std::cell::RefCell;
 
 const E: f64 = 1e4;
 const NU: f64 = 0.33;
@@ -49,7 +49,6 @@ pub struct SimpleScenario {
     dim: usize,
     small_grad_vector: RefCell<HashSet<usize>>,
 }
-
 
 impl Problem for SimpleScenario {
     type HessianType = CooMatrix<f64>;
@@ -89,15 +88,14 @@ impl Problem for SimpleScenario {
                 .for_each(|(i_i, g_i)| res_grad[*i_i] += g_i);
         }
 
-
-            let mut small_grad_vector_unwrap = self.small_grad_vector.borrow_mut();
-            small_grad_vector_unwrap.clear();
-            res_grad.iter().enumerate().for_each(|(i, x)| {
-                if x.abs() < 1e-5 {
-                    small_grad_vector_unwrap.insert(i);
-                }
-            });
-            // small_grad_vector = Some(small_grad_vector_unwrap);
+        let mut small_grad_vector_unwrap = self.small_grad_vector.borrow_mut();
+        small_grad_vector_unwrap.clear();
+        res_grad.iter().enumerate().for_each(|(i, x)| {
+            if x.abs() < 1e-5 {
+                small_grad_vector_unwrap.insert(i);
+            }
+        });
+        // small_grad_vector = Some(small_grad_vector_unwrap);
         Some(res_grad)
     }
 
@@ -108,13 +106,13 @@ impl Problem for SimpleScenario {
         let mut count = 0;
         for i in 0..self.p.n_pris() {
             let indices = self.p.primitive_to_ind_vector(i);
-                if indices
-                    .iter()
-                    .all(|x| self.small_grad_vector.borrow().contains(x))
-                {
-                    count+=1;
-                    continue;
-                }
+            if indices
+                .iter()
+                .all(|x| self.small_grad_vector.borrow().contains(x))
+            {
+                count += 1;
+                continue;
+            }
             vert_vec
                 .iter_mut()
                 .zip(indices.iter())
@@ -141,7 +139,7 @@ impl Problem for SimpleScenario {
                 }
             }
         }
-        print!("skipped hessian: {}\n",count);
+        print!("skipped hessian: {}\n", count);
         Some(res)
     }
 }

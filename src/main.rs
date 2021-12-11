@@ -17,6 +17,6 @@ fn main() {
         let start = Instant::now();
         a.step();
         let duration = start.elapsed();
-    println!("duration: {:?}", duration);
+        println!("duration: {:?}", duration);
     }
 }
