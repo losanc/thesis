@@ -46,9 +46,10 @@ pub struct SimpleScenario {
     p: Plane,
     name: String,
     dim: usize,
+
 }
 
-static mut : Option<HashSet<usize>> = None;
+static mut small_grad_vector: Option<HashSet<usize>> = None;
 
 
 impl Problem for SimpleScenario {
