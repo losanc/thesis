@@ -11,6 +11,7 @@ use num::{One, Zero};
 use optimization::Problem;
 use std::collections::HashSet;
 use std::string::String;
+use std::cell::RefCell;
 
 const E: f64 = 1e4;
 const NU: f64 = 0.33;
@@ -46,10 +47,8 @@ pub struct SimpleScenario {
     p: Plane,
     name: String,
     dim: usize,
-
+    small_grad_vector: RefCell<HashSet<usize>>,
 }
-
-static mut small_grad_vector: Option<HashSet<usize>> = None;
 
 
 impl Problem for SimpleScenario {
@@ -90,8 +89,8 @@ impl Problem for SimpleScenario {
                 .for_each(|(i_i, g_i)| res_grad[*i_i] += g_i);
         }
 
-        unsafe {
-            let mut small_grad_vector_unwrap = small_grad_vector.as_mut().unwrap();
+
+            let mut small_grad_vector_unwrap = self.small_grad_vector.borrow_mut();
             small_grad_vector_unwrap.clear();
             res_grad.iter().enumerate().for_each(|(i, x)| {
                 if x.abs() < 1e-5 {
@@ -99,7 +98,6 @@ impl Problem for SimpleScenario {
                 }
             });
             // small_grad_vector = Some(small_grad_vector_unwrap);
-        }
         Some(res_grad)
     }
 
@@ -110,15 +108,13 @@ impl Problem for SimpleScenario {
         let mut count = 0;
         for i in 0..self.p.n_pris() {
             let indices = self.p.primitive_to_ind_vector(i);
-            unsafe {
                 if indices
                     .iter()
-                    .all(|x| small_grad_vector.as_ref().unwrap().contains(x))
+                    .all(|x| self.small_grad_vector.borrow().contains(x))
                 {
                     count+=1;
                     continue;
                 }
-            }
             vert_vec
                 .iter_mut()
                 .zip(indices.iter())
@@ -173,9 +169,6 @@ impl ScenarioProblem for SimpleScenario {
 
 impl SimpleScenario {
     pub fn new() -> Self {
-        unsafe {
-            small_grad_vector = Some(HashSet::new());
-        }
         let r = 10;
         let c = 10;
         let mut p = Plane::new(r, c);
@@ -193,6 +186,7 @@ impl SimpleScenario {
             dim: p.dim(),
             p: p,
             name: String::from("Simple_New"),
+            small_grad_vector: RefCell::new(HashSet::new()),
         }
     }
 }
