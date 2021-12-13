@@ -6,7 +6,7 @@ use na::DVector;
 use nalgebra as na;
 use nalgebra::SVector;
 use nalgebra_sparse as nas;
-use nas::{CooMatrix, CsrMatrix};
+use nas::CooMatrix;
 use num::{One, Zero};
 use optimization::Problem;
 use std::cell::RefCell;
@@ -17,6 +17,7 @@ const E: f64 = 1e6;
 const NU: f64 = 0.33;
 const MIU: f64 = E / (2.0 * (1.0 + NU));
 const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
+const KETA: f64 = 1e8;
 
 macro_rules! energy_function {
     ($vec:ident, $ene:ident,$mat:ident,$inv_mat:ident, $square:expr, $type:ty) => {
@@ -53,8 +54,35 @@ pub struct BouncingScenario {
 impl Problem for BouncingScenario {
     type HessianType = CooMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
-        let res = (x - &self.x_tao).transpose() * (&self.mass * (x - &self.x_tao));
-        res[(0, 0)]
+        let temp = x - &self.x_tao - &self.g_vec * (self.dt * self.dt);
+        let res = temp.transpose() * (&self.mass * temp);
+        let mut res = res[(0, 0)] / (2.0 * self.dt * self.dt);
+        x.iter().skip(1).step_by(2).for_each(|x_i| {
+            if *x_i < 0.0 {
+                res -= KETA * x_i * x_i * x_i;
+            }
+        });
+        let mut vert_vec = SVector::<f64, 6>::zeros();
+        for i in 0..self.p.n_pris() {
+            let indices = self.p.primitive_to_ind_vector(i);
+            vert_vec
+                .iter_mut()
+                .zip(indices.iter())
+                .for_each(|(g_i, i)| *g_i = x[*i]);
+            // let vert_gradient_vec = vector_to_gradients(&vert_vec);
+
+            let inv_mat = self.p.m_inv(i);
+            // let inv_mat = constant_matrix_to_gradients(&inv_mat);
+
+            energy_function!(
+                vert_vec, ene, mat, inv_mat,
+                // todo
+                // self.square[index],
+                0.5, f64
+            );
+            res += ene;
+        }
+        res
     }
     fn gradient(&self, x: &DVector<f64>) -> Option<DVector<f64>> {
         let mut res_grad = &self.mass * (x - &self.x_tao - &self.g_vec * (self.dt * self.dt))
@@ -89,11 +117,15 @@ impl Problem for BouncingScenario {
                 .for_each(|(i_i, g_i)| res_grad[*i_i] += g_i);
         }
 
-        x.iter().zip(res_grad.iter_mut()).for_each(|(x_i, r_i)| {
-            if *x_i < 0.0 {
-                *r_i -= 300000.0 * x_i * x_i;
-            }
-        });
+        x.iter()
+            .zip(res_grad.iter_mut())
+            .skip(1)
+            .step_by(2)
+            .for_each(|(x_i, r_i)| {
+                if *x_i < 0.0 {
+                    *r_i -= 3.0 * KETA * x_i * x_i;
+                }
+            });
 
         let mut small_grad_vector_unwrap = self.small_grad_vector.borrow_mut();
         small_grad_vector_unwrap.clear();
@@ -110,14 +142,14 @@ impl Problem for BouncingScenario {
         let res = self.mass.clone();
         let mut res = res / (self.dt * self.dt);
         let mut vert_vec = SVector::<f64, 6>::zeros();
-        let mut count = 0;
+        let mut _count = 0;
         for i in 0..self.p.n_pris() {
             let indices = self.p.primitive_to_ind_vector(i);
             if indices
                 .iter()
                 .all(|x| self.small_grad_vector.borrow().contains(x))
             {
-                count += 1;
+                _count += 1;
                 continue;
             }
             vert_vec
@@ -145,11 +177,15 @@ impl Problem for BouncingScenario {
                 }
             }
         }
-        x.iter().zip((0..x.len())).for_each(|(x_i, i_i)| {
-            if *x_i < 0.0 {
-                res.push(i_i, i_i, -600000.0 * x_i);
-            }
-        });
+        x.iter()
+            .zip(0..x.len())
+            .skip(1)
+            .step_by(2)
+            .for_each(|(x_i, i_i)| {
+                if *x_i < 0.0 {
+                    res.push(i_i, i_i, -6.0 * KETA * x_i);
+                }
+            });
         // print!("skipped hessian: {}\n", count);
         Some(res)
     }
@@ -161,7 +197,7 @@ impl ScenarioProblem for BouncingScenario {
         self.x_tao.clone()
     }
     fn set_all_vertices_vector(&mut self, vertices: DVector<f64>) {
-        let mut velocity = (&vertices - &self.x_old) / self.dt;
+        let velocity = (&vertices - &self.x_old) / self.dt;
         // velocity *= 0.995;
         self.p.set_all_velocities_vector(velocity);
         self.p.set_all_vertices_vector(vertices);
@@ -188,13 +224,13 @@ impl BouncingScenario {
         let mut g_vec = DVector::zeros(p.dim() * p.n_verts());
         for i in 0..p.n_verts() {
             g_vec[2 * i + 1] = -9.8;
-            vec[2 * i + 1] += 10.0;
+            vec[2 * i + 1] += 1.0;
         }
         p.set_all_vertices_vector(vec.clone());
         p.save_to_obj::<_>("init.obj");
 
         Self {
-            dt: 0.1,
+            dt: 0.01,
             x_tao: x_tao,
             mass: p.mass_matrix(),
             x_old: vec,

@@ -12,13 +12,7 @@ pub struct NewtonSolver {}
 impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>> Solver<P, L, LS>
     for NewtonSolver
 {
-    // fn next(&self, p: &P, lin: &L, _ls: &LS, input: &DVector<f64>) -> DVector<f64> {
-    //     let g = p.gradient(input).unwrap();
-    //     let h = p.hessian(input).unwrap();
-    //     lin.solve(&h, &g)
-    // }
-
-    fn solve(&self, p: &P, lin: &L, _ls: &LS, input: &DVector<f64>) -> DVector<f64> {
+    fn solve(&self, p: &P, lin: &L, ls: &LS, input: &DVector<f64>) -> DVector<f64> {
         let mut g = p.gradient(input).unwrap();
         let mut h: P::HessianType;
         let mut count = 0;
@@ -27,6 +21,7 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
             h = p.hessian(&res).unwrap();
             print!("gradient norm{}\n", g.norm());
             let delta = lin.solve(&h, &g);
+            let delta = ls.search(p, &res, delta);
             res -= delta;
             g = p.gradient(&res).unwrap();
             count += 1;

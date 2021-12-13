@@ -1,9 +1,9 @@
 use crate::LineSearch;
-// mod simplels;
-// pub use simplels::SimpleLineSearch;
-use nalgebra as na;
-use na::DVector;
+mod simplels;
 use crate::Problem;
+use na::DVector;
+use nalgebra as na;
+pub use simplels::SimpleLineSearch;
 pub struct NoLineSearch {}
 
 impl<P: Problem> LineSearch<P> for NoLineSearch {

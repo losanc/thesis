@@ -99,6 +99,9 @@ pub trait LinearSolver {
 
 pub trait LineSearch<P: Problem> {
     fn search(&self, pro: &P, current: &DVector<f64>, direction: DVector<f64>) -> DVector<f64>;
+    fn check(&self, pro: &P, current: &DVector<f64>, direction: DVector<f64>) -> bool {
+        true
+    }
 }
 
 pub trait Solver<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>>:
