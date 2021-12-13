@@ -9,7 +9,7 @@ use nalgebra as na;
 
 pub struct NewtonSolver {}
 
-impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch> Solver<P, L, LS>
+impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>> Solver<P, L, LS>
     for NewtonSolver
 {
     // fn next(&self, p: &P, lin: &L, _ls: &LS, input: &DVector<f64>) -> DVector<f64> {

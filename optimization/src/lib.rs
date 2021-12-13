@@ -97,11 +97,11 @@ pub trait LinearSolver {
     fn solve(&self, A: &Self::MatrixType, b: &DVector<f64>) -> DVector<f64>;
 }
 
-pub trait LineSearch {
-    // TODO
+pub trait LineSearch<P: Problem> {
+    fn search(&self, pro: &P, current: &DVector<f64>, direction: DVector<f64>) -> DVector<f64>;
 }
 
-pub trait Solver<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch>:
+pub trait Solver<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>>:
     Sized
 {
     fn solve(&self, pro: &P, lin: &L, ls: &LS, input: &DVector<f64>) -> DVector<f64>;

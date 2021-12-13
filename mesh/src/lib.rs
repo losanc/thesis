@@ -44,10 +44,10 @@ pub trait MeshType<const T: usize, const D: usize> {
     fn all_velocities_to_vector(&self) -> na::DVector<f64>;
 
     /// set verteices vector of all vertices
-    fn set_all_vertices_vector(&mut self, vec: &na::DVector<f64>);
+    fn set_all_vertices_vector(&mut self, vec: na::DVector<f64>);
 
     /// set velocities vector of all vertices
-    fn set_all_velocities_vector(&mut self, vec: &na::DVector<f64>);
+    fn set_all_velocities_vector(&mut self, vec: na::DVector<f64>);
 
     fn mass_matrix(&self) -> Self::MassMatrixType;
 

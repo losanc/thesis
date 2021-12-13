@@ -123,13 +123,13 @@ impl MeshType<2, 3> for Plane {
         res
     }
 
-    fn set_all_vertices_vector(&mut self, vec: &na::DVector<f64>) {
+    fn set_all_vertices_vector(&mut self, vec: na::DVector<f64>) {
         for (i, v) in self.vers.iter_mut().enumerate() {
             *v = na::vector![vec[i * 2], vec[i * 2 + 1]];
         }
     }
 
-    fn set_all_velocities_vector(&mut self, vec: &na::DVector<f64>) {
+    fn set_all_velocities_vector(&mut self, vec: na::DVector<f64>) {
         for (i, v) in self.vels.iter_mut().enumerate() {
             *v = na::vector![vec[i * 2], vec[i * 2 + 1]];
         }

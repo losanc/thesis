@@ -1,4 +1,6 @@
-mod simple_new;
+// mod simple_new;
+mod bouncing;
+pub use bouncing::BouncingScenario as OneScenario;
 use na::DVector;
 use nalgebra as na;
 use optimization::linearsolver::{JacobianPre, NewtonCG};
@@ -7,12 +9,11 @@ use optimization::solver::NewtonSolver;
 use optimization::LineSearch;
 use optimization::LinearSolver;
 use optimization::{Problem, Solver};
-pub use simple_new::SimpleScenario;
 
 pub trait ScenarioProblem: Problem {
     fn frame_init(&mut self);
     fn initial_guess(&self) -> DVector<f64>;
-    fn set_all_vertices_vector(&mut self, vertices: &DVector<f64>);
+    fn set_all_vertices_vector(&mut self, vertices: DVector<f64>);
     fn save_to_file(&self, frame: usize);
 }
 
@@ -20,7 +21,7 @@ pub struct Scenario<
     P: ScenarioProblem,
     S: Solver<P, LSo, LSe>,
     LSo: LinearSolver<MatrixType = P::HessianType>,
-    LSe: LineSearch,
+    LSe: LineSearch<P>,
 > {
     problem: P,
     frame: usize,
@@ -35,7 +36,7 @@ where
     P: ScenarioProblem,
     S: Solver<P, LSo, LSe>,
     LSo: LinearSolver<MatrixType = P::HessianType>,
-    LSe: LineSearch,
+    LSe: LineSearch<P>,
 {
     pub fn new(p: P, s: S, lso: LSo, lse: LSe) -> Self {
         Scenario {
@@ -54,9 +55,9 @@ where
         let res = self
             .solver
             .solve(&self.problem, &self.linearsolver, &self.ls, &self.x);
-        self.problem.set_all_vertices_vector(&res);
+        self.problem.set_all_vertices_vector(res);
         self.frame += 1;
         println!("{}", self.frame);
-        // self.problem.save_to_file(self.frame);
+        self.problem.save_to_file(self.frame);
     }
 }

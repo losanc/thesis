@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::string::String;
 
-const E: f64 = 1e4;
+const E: f64 = 1e6;
 const NU: f64 = 0.33;
 const MIU: f64 = E / (2.0 * (1.0 + NU));
 const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
@@ -38,11 +38,11 @@ macro_rules! energy_function {
     };
 }
 
-pub struct SimpleScenario {
+pub struct BouncingScenario {
     x_tao: DVector<f64>,
     x_old: DVector<f64>,
     mass: CooMatrix<f64>,
-
+    g_vec: DVector<f64>,
     dt: f64,
     p: Plane,
     name: String,
@@ -50,14 +50,15 @@ pub struct SimpleScenario {
     small_grad_vector: RefCell<HashSet<usize>>,
 }
 
-impl Problem for SimpleScenario {
+impl Problem for BouncingScenario {
     type HessianType = CooMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
         let res = (x - &self.x_tao).transpose() * (&self.mass * (x - &self.x_tao));
         res[(0, 0)]
     }
     fn gradient(&self, x: &DVector<f64>) -> Option<DVector<f64>> {
-        let mut res_grad = &self.mass * (x - &self.x_tao) / (self.dt * self.dt);
+        let mut res_grad = &self.mass * (x - &self.x_tao - &self.g_vec * (self.dt * self.dt))
+            / (self.dt * self.dt);
         // TODO: because only svector used inside, so it has to be fixed sive when compiling time.
         let mut vert_vec = SVector::<f64, 6>::zeros();
         for i in 0..self.p.n_pris() {
@@ -87,6 +88,12 @@ impl Problem for SimpleScenario {
                 .zip(grad.iter())
                 .for_each(|(i_i, g_i)| res_grad[*i_i] += g_i);
         }
+
+        x.iter().zip(res_grad.iter_mut()).for_each(|(x_i, r_i)| {
+            if *x_i < 0.0 {
+                *r_i -= 300000.0 * x_i * x_i;
+            }
+        });
 
         let mut small_grad_vector_unwrap = self.small_grad_vector.borrow_mut();
         small_grad_vector_unwrap.clear();
@@ -132,19 +139,23 @@ impl Problem for SimpleScenario {
                 Hessian<6>
             );
             let small_hessian = ene.hessian();
-            // print!("{}\n",small_hessian);
             for i in 0..6 {
                 for j in 0..6 {
                     res.push(indices[i], indices[j], small_hessian[(i, j)]);
                 }
             }
         }
-        print!("skipped hessian: {}\n", count);
+        x.iter().zip((0..x.len())).for_each(|(x_i, i_i)| {
+            if *x_i < 0.0 {
+                res.push(i_i, i_i, -600000.0 * x_i);
+            }
+        });
+        // print!("skipped hessian: {}\n", count);
         Some(res)
     }
 }
 
-impl ScenarioProblem for SimpleScenario {
+impl ScenarioProblem for BouncingScenario {
     fn initial_guess(&self) -> DVector<f64> {
         // TODO
         self.x_tao.clone()
@@ -156,7 +167,8 @@ impl ScenarioProblem for SimpleScenario {
         self.p.set_all_vertices_vector(vertices);
     }
     fn save_to_file(&self, frame: usize) {
-        self.p.save_to_obj(format!("{}{}.obj", self.name, frame));
+        self.p
+            .save_to_obj(format!("output/{}{}.obj", self.name, frame));
     }
     fn frame_init(&mut self) {
         self.x_old = self.p.all_vertices_to_vector();
@@ -165,25 +177,31 @@ impl ScenarioProblem for SimpleScenario {
     }
 }
 
-impl SimpleScenario {
+impl BouncingScenario {
     pub fn new() -> Self {
         let r = 10;
         let c = 10;
         let mut p = Plane::new(r, c);
         let x_tao = DVector::zeros(p.dim() * r * c);
         let mut vec = p.all_vertices_to_vector();
-        vec[0] = -0.5;
-        vec[1] = -0.5;
+
+        let mut g_vec = DVector::zeros(p.dim() * p.n_verts());
+        for i in 0..p.n_verts() {
+            g_vec[2 * i + 1] = -9.8;
+            vec[2 * i + 1] += 10.0;
+        }
         p.set_all_vertices_vector(vec.clone());
-        p.save_to_obj::<_>("test.obj");
+        p.save_to_obj::<_>("init.obj");
+
         Self {
-            dt: 0.01,
+            dt: 0.1,
             x_tao: x_tao,
             mass: p.mass_matrix(),
             x_old: vec,
             dim: p.dim(),
             p: p,
-            name: String::from("Simple_New"),
+            g_vec: g_vec,
+            name: String::from("Bouncing"),
             small_grad_vector: RefCell::new(HashSet::new()),
         }
     }
