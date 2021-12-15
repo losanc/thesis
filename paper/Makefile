@@ -5,7 +5,7 @@ all: report
 .PHONY: clean
 
 report:
-	pdflatex $(DOCNAME).tex
+	pdflatex -halt-on-error  $(DOCNAME).tex 
 	bibtex $(DOCNAME).aux
 	pdflatex $(DOCNAME).tex
 	pdflatex $(DOCNAME).tex

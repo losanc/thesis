@@ -1,40 +1,37 @@
 \documentclass[
 	11pt, 
-	DIV=10,
 	a4paper, 
-	oneside, 
-	headings=normal, 
-	captions=tableheading,
+	oneside,  
 	final, 
-	numbers=noenddot
-]{scrartcl}
+]{report}
 
-
-\usepackage{lipsum}
 \usepackage{graphicx}
 
 
-\title{Thema}
-\subtitle{\vspace{0.5cm}Seminar: Current Topics in Physically-Based Animation}
-\author{Autor}
+\title{Something about Hessian Matrix}
+% \subtitle{Master-Thesis}
+\author{Hantao Hui}
 
 
 \begin{document}
 \maketitle
+\newpage
+\tableofcontents
 
-
-\section{Introduction}
-\lipsum[2-4]
-
-\section{Related Work}
+\chapter{INTRODUCTION}
+\section{Motivation}
+As recent research has showed that ..
+\section{Structure}
+The first chapter is goting to talk about somehting !
+\chapter{RELATED WORK}
 
 This is a reference~\cite{Foley:1990}.
 
-\section{Images and Tables}
+\section{Related Work 1}
 
 \begin{figure}[tb]
 	\centering
-	\includegraphics[width=0.5\linewidth]{images/image} 
+	\includegraphics[width=0.5\linewidth]{images/image}
 	\caption{\label{fig:image} This is an image.
 	}
 \end{figure}
@@ -44,11 +41,11 @@ This is a reference~\cite{Foley:1990}.
 		\centering
 		\begin{tabular}{|c|c|c|c|}
 			\hline
-			& col 1 & col 2 & col 3   \\
+			      & col 1 & col 2 & col 3 \\
 			\hline	
-			row 1  & 1 & 2 & 3 \\
-			row 2  & 4 & 5 & 6 \\
-			row 3  & 7 & 8 & 9 \\
+			row 1 & 1     & 2     & 3     \\
+			row 2 & 4     & 5     & 6     \\
+			row 3 & 7     & 8     & 9     \\
 			\hline
 		\end{tabular}
 		\caption{\label{tab:example} This is a table.}
@@ -60,7 +57,20 @@ Figure~\ref{fig:image} shows an example of an image.
 Table~\ref{tab:example} shows an example of a table.
 
 
+\chapter{TECHNICAL BACKGROUND}
+\section{FEM Simulation}
+\section{Backward Euler}
+\section{Minimization Problem}
+\chapter{FAST HESSIAN ESTIMATION}
+\section{Skip Hessian}
+\section{Hessian}
+\chapter{SIMULATION RESULT}
+\section{Scenario Setup}
+\section{Some Analysis}
+\chapter{CONCLUSION AND FUTURE WORK}
+
+
 \bibliographystyle{alpha}
 \bibliography{references}
 
-\end{document}          
+\end{document}
