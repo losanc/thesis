@@ -11,6 +11,7 @@ use std::path::Path;
 
 const DENSITY: f64 = 1e3;
 
+#[derive(Clone)]
 pub struct Plane {
     n_fixed: usize,
     n_verts: usize,
@@ -73,6 +74,11 @@ impl MeshType<2, 3> for Plane {
     fn indices(&self) -> Vec<[usize; 3]> {
         self.indices.clone()
     }
+    #[inline]
+    fn volume(&self, i: usize) -> f64 {
+        self.square[i]
+    }
+
     fn save_to_obj<P: AsRef<Path>>(&self, path: P) {
         let mut file = File::create(path).unwrap();
         writeln!(file, "g obj").unwrap();

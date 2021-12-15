@@ -54,7 +54,7 @@ where
             .solve(&self.problem, &self.linearsolver, &self.ls, &self.x);
         self.problem.set_all_vertices_vector(res);
         self.frame += 1;
-        println!("{}", self.frame);
+        println!("Frame: {}", self.frame);
         self.problem.save_to_file(self.frame);
     }
 }

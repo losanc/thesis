@@ -4,6 +4,8 @@ use std::path::Path;
 mod plane;
 use nalgebra::SMatrix;
 
+// D = T+1
+// because rust doesn't support const generic operation yet
 pub trait MeshType<const T: usize, const D: usize> {
     // /// primitive elastic energy
     // type PriType;
@@ -29,14 +31,11 @@ pub trait MeshType<const T: usize, const D: usize> {
     }
 
     fn indices(&self) -> Vec<[usize; D]>;
-
     fn n_verts(&self) -> usize;
     fn n_fixed_verts(&self) -> usize;
     fn n_pris(&self) -> usize;
     fn m_inv(&self, i: usize) -> SMatrix<f64, T, T>;
-
-    /// save object to obj file
-    fn save_to_obj<P: AsRef<Path>>(&self, path: P);
+    fn volume(&self, i: usize) -> f64;
 
     /// get verteices vector of all vertices
     fn all_vertices_to_vector(&self) -> na::DVector<f64>;
@@ -53,6 +52,10 @@ pub trait MeshType<const T: usize, const D: usize> {
 
     /// get a primitive verteices vector of primitive
     fn primitive_to_ind_vector(&self, index: usize) -> Vec<usize>;
+
+    /// save object to obj file
+    fn save_to_obj<P: AsRef<Path>>(&self, path: P);
+
     // /// returns the energy of a primitive(e.g. tet or triangle) as f64 number
     // fn primitive_elastic_energy(&self, index: usize) -> Self::PriType;
     // /// returns the energy of a primitive(e.g. tet or triangle) as gradient
