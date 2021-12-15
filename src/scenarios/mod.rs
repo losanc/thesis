@@ -1,6 +1,6 @@
 // mod simple_new;
-mod bouncing;
-pub use bouncing::BouncingScenario as OneScenario;
+mod bouncing_update;
+pub use bouncing_update::BouncingScenario as OneScenario;
 use na::DVector;
 use nalgebra as na;
 use optimization::LineSearch;
@@ -55,6 +55,7 @@ where
         self.problem.set_all_vertices_vector(res);
         self.frame += 1;
         println!("Frame: {}", self.frame);
+        #[cfg(feature = "save")]
         self.problem.save_to_file(self.frame);
     }
 }
