@@ -3,6 +3,10 @@ use nalgebra as na;
 use nalgebra_sparse as nas;
 use nas::{CooMatrix, CscMatrix, CsrMatrix};
 
+pub use crate::linearsolver::*;
+pub use crate::linesearch::*;
+pub use crate::solver::*;
+
 pub trait MatrixType {
     fn mul(&self, v: &DVector<f64>) -> DVector<f64>;
     fn identity(&self) -> Self;

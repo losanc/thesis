@@ -4,14 +4,11 @@ use mesh::MeshType;
 use mesh::Plane;
 use na::DVector;
 use nalgebra as na;
-use nalgebra::SMatrix;
 use nalgebra::SVector;
 use nalgebra_sparse as nas;
 use nas::CooMatrix;
 use num::{One, Zero};
 use optimization::Problem;
-use std::cell::RefCell;
-use std::collections::HashSet;
 use std::string::String;
 
 const E: f64 = 1e6;
@@ -49,10 +46,6 @@ struct Inertia {
 
 struct Elastic {
     mesh: Plane,
-    mark_list: RefCell<HashSet<usize>>,
-    energy_list: RefCell<Vec<f64>>,
-    gradient_list: RefCell<Vec<SVector<f64, 6>>>,
-    hessian_list: RefCell<Vec<SMatrix<f64, 6, 6>>>,
 }
 
 struct Bounce {
@@ -139,8 +132,6 @@ impl Problem for Elastic {
     fn gradient(&self, x: &DVector<f64>) -> Option<DVector<f64>> {
         let mut vert_vec = SVector::<f64, 6>::zeros();
         let mut res = DVector::zeros(x.len());
-        let mut mark_list = self.mark_list.borrow_mut();
-        mark_list.clear();
         for i in 0..self.mesh.n_pris() {
             let indices = self.mesh.primitive_to_ind_vector(i);
             vert_vec
@@ -154,15 +145,6 @@ impl Problem for Elastic {
             let square = self.mesh.volume(i);
             energy_function!(vert_gradient_vec, ene, mat, inv_mat, square, Gradient<6>);
             let grad = ene.gradient();
-
-            // Magic Here Starts
-
-            if (&grad - &self.gradient_list.borrow()[i]).norm() < 0.1 {
-                mark_list.insert(i);
-            } else {
-                self.gradient_list.borrow_mut()[i] = grad.clone();
-            }
-            // Magic Here Ends
             indices
                 .iter()
                 .zip(grad.iter())
@@ -174,33 +156,24 @@ impl Problem for Elastic {
     fn hessian(&self, x: &DVector<f64>) -> Option<CooMatrix<f64>> {
         let mut vert_vec = SVector::<f64, 6>::zeros();
         let mut res = CooMatrix::<f64>::new(x.len(), x.len());
-        let mut count = 0;
         for i in 0..self.mesh.n_pris() {
-            let small_hessian;
             let indices = self.mesh.primitive_to_ind_vector(i);
-            if self.mark_list.borrow().contains(&i) {
-                small_hessian = self.hessian_list.borrow()[i];
-                count += 1;
-            } else {
-                vert_vec
-                    .iter_mut()
-                    .zip(indices.iter())
-                    .for_each(|(g_i, i)| *g_i = x[*i]);
-                let vert_gradient_vec = vector_to_hessians(&vert_vec);
-                let inv_mat = self.mesh.m_inv(i);
-                let inv_mat = constant_matrix_to_hessians(&inv_mat);
-                let square = self.mesh.volume(i);
-                energy_function!(vert_gradient_vec, ene, mat, inv_mat, square, Hessian<6>);
-                small_hessian = ene.hessian();
-                self.hessian_list.borrow_mut()[i] = small_hessian.clone();
-            }
+            vert_vec
+                .iter_mut()
+                .zip(indices.iter())
+                .for_each(|(g_i, i)| *g_i = x[*i]);
+            let vert_gradient_vec = vector_to_hessians(&vert_vec);
+            let inv_mat = self.mesh.m_inv(i);
+            let inv_mat = constant_matrix_to_hessians(&inv_mat);
+            let square = self.mesh.volume(i);
+            energy_function!(vert_gradient_vec, ene, mat, inv_mat, square, Hessian<6>);
+            let small_hessian = ene.hessian();
             for i in 0..6 {
                 for j in 0..6 {
                     res.push(indices[i], indices[j], small_hessian[(i, j)]);
                 }
             }
         }
-        println!("speed up hessian: {}", count);
         Some(res)
     }
 }
@@ -277,12 +250,12 @@ impl BouncingScenario {
             vec[2 * i + 1] += 1.0;
         }
         p.set_all_vertices_vector(vec);
-        p.save_to_obj(format!("output/BounceNew0.obj"));
+        p.save_to_obj(format!("output/Bounce0.obj"));
 
         Self {
             dt: 0.01,
             plane: p.clone(),
-            name: String::from("BounceNew"),
+            name: String::from("Bounce"),
             x_old: DVector::<f64>::zeros(1),
             inertia: Inertia {
                 x_tao: DVector::<f64>::zeros(1),
@@ -290,13 +263,7 @@ impl BouncingScenario {
                 dt: 0.01,
                 mass: p.mass_matrix(),
             },
-            elastic: Elastic {
-                mark_list: RefCell::new(HashSet::new()),
-                energy_list: RefCell::new(vec![0.0; p.n_pris()]),
-                gradient_list: RefCell::new(vec![SVector::<f64, 6>::zeros(); p.n_pris()]),
-                hessian_list: RefCell::new(vec![SMatrix::<f64, 6, 6>::zeros(); p.n_pris()]),
-                mesh: p,
-            },
+            elastic: Elastic { mesh: p },
             bounce: Bounce { keta: KETA },
         }
     }

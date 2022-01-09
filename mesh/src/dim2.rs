@@ -6,12 +6,11 @@ use nalgebra::{matrix, SMatrix};
 fn volume_mass_construct(
     density: f64,
     verts: &DVector<f64>,
-    prim_connected_vert_indices: &Vec<[usize; 3]>,
+    prim_connected_vert_indices: &[[usize; 3]],
 ) -> (DVector<f64>, Vec<f64>, Vec<SMatrix<f64, 2, 2>>) {
-    let n_verts = verts.len();
     let n_prims = prim_connected_vert_indices.len();
 
-    let mut mass = DVector::<f64>::zeros(2 * n_verts);
+    let mut mass = DVector::<f64>::zeros(verts.len());
     let mut volumes = Vec::<f64>::new();
     let mut ma_invs = Vec::<SMatrix<f64, 2, 2>>::new();
 
@@ -42,7 +41,7 @@ fn volume_mass_construct(
         ];
         ma_invs.push(matrix.try_inverse().unwrap());
     }
-    return (mass, volumes, ma_invs);
+    (mass, volumes, ma_invs)
 }
 
 pub fn plane(r: usize, c: usize, d: Option<f64>) -> Mesh<2, 3> {
@@ -63,9 +62,9 @@ pub fn plane(r: usize, c: usize, d: Option<f64>) -> Mesh<2, 3> {
     // let mut vers = Vec::<SVector<f64, 2>>::new();
     let verts = DVector::from_fn(2 * r * c, |i, _| {
         if i % 2 == 1 {
-            return (((i - 1) / 2) % c) as f64;
+            (((i - 1) / 2) % c) as f64
         } else {
-            return ((i / 2) / c) as f64;
+            ((i / 2) / c) as f64
         }
     });
 
@@ -113,16 +112,16 @@ pub fn plane(r: usize, c: usize, d: Option<f64>) -> Mesh<2, 3> {
         n_prims: count,
         surface: None,
 
-        verts: verts,
+        verts,
         velos: DVector::<f64>::zeros(2 * r * c),
         accls: DVector::<f64>::zeros(2 * r * c),
         masss: mass,
 
-        volumes: volumes,
-        ma_invs: ma_invs,
+        volumes,
+        ma_invs,
 
-        prim_connected_vert_indices: prim_connected_vert_indices,
-        vert_connected_prim_indices: vert_connected_prim_indices,
+        prim_connected_vert_indices,
+        vert_connected_prim_indices,
     }
 }
 
@@ -155,12 +154,12 @@ pub fn circle(r: f64, s: usize, d: Option<f64>) -> Mesh<2, 3> {
             let ind = ((i - 1) / 2) as f64;
             let ratio = ind / s as f64;
             let angle = ratio * 2.0 * std::f64::consts::PI;
-            return r * angle.sin();
+            r * angle.sin()
         } else {
             let ind = (i / 2) as f64;
             let ratio = ind / s as f64;
             let angle = ratio * 2.0 * std::f64::consts::PI;
-            return r * angle.cos();
+            r * angle.cos()
         }
     });
 
@@ -181,19 +180,19 @@ pub fn circle(r: f64, s: usize, d: Option<f64>) -> Mesh<2, 3> {
     let (mass, volumes, ma_invs) =
         volume_mass_construct(density, &verts, &prim_connected_vert_indices);
     Mesh {
-        n_verts: n_verts,
-        n_prims: n_prims,
+        n_verts,
+        n_prims,
         surface: None,
 
-        verts: verts,
+        verts,
         velos: DVector::<f64>::zeros(2 * n_verts),
         accls: DVector::<f64>::zeros(2 * n_verts),
         masss: mass,
 
-        volumes: volumes,
-        ma_invs: ma_invs,
+        volumes,
+        ma_invs,
 
-        prim_connected_vert_indices: prim_connected_vert_indices,
-        vert_connected_prim_indices: vert_connected_prim_indices,
+        prim_connected_vert_indices,
+        vert_connected_prim_indices,
     }
 }

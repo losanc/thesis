@@ -1,6 +1,5 @@
-// mod simple_new;
-mod bouncing_update;
-pub use bouncing_update::BouncingScenario as OneScenario;
+mod bouncing;
+pub use bouncing::BouncingScenario;
 use na::DVector;
 use nalgebra as na;
 use optimization::LineSearch;

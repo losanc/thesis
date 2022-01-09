@@ -1,14 +1,17 @@
 use crate::scenarios::ScenarioProblem;
 use autodiff::*;
-use mesh::*;
+use mesh::MeshType;
+use mesh::Plane;
 use na::DVector;
 use nalgebra as na;
+use nalgebra::SMatrix;
 use nalgebra::SVector;
-use nalgebra::{DMatrix, SMatrix};
 use nalgebra_sparse as nas;
 use nas::CooMatrix;
 use num::{One, Zero};
 use optimization::Problem;
+use std::cell::RefCell;
+use std::collections::HashSet;
 use std::string::String;
 
 const E: f64 = 1e6;
@@ -45,10 +48,11 @@ struct Inertia {
 }
 
 struct Elastic {
-    n_prims: usize,
-    prim_connected_vert_indices: Vec<[usize; 3]>,
-    volumes: Vec<f64>,
-    ma_invs: Vec<SMatrix<f64, 2, 2>>,
+    mesh: Plane,
+    mark_list: RefCell<HashSet<usize>>,
+    energy_list: RefCell<Vec<f64>>,
+    gradient_list: RefCell<Vec<SVector<f64, 6>>>,
+    hessian_list: RefCell<Vec<SMatrix<f64, 6, 6>>>,
 }
 
 struct Bounce {
@@ -101,10 +105,10 @@ impl Problem for Bounce {
     fn hessian(&self, x: &DVector<f64>) -> Option<CooMatrix<f64>> {
         let mut res = CooMatrix::new(x.len(), x.len());
         x.iter()
-            .enumerate()
+            .zip(0..x.len())
             .skip(1)
             .step_by(2)
-            .for_each(|(i_i, x_i)| {
+            .for_each(|(x_i, i_i)| {
                 if *x_i < 0.0 {
                     res.push(i_i, i_i, -6.0 * self.keta * x_i);
                 }
@@ -118,23 +122,15 @@ impl Problem for Elastic {
     fn apply(&self, x: &DVector<f64>) -> f64 {
         let mut vert_vec = SVector::<f64, 6>::zeros();
         let mut res = 0.0;
-        for i in 0..self.n_prims {
-            let ind = self.prim_connected_vert_indices[i];
-            let indices = vec![
-                ind[0] * 2,
-                ind[0] * 2 + 1,
-                ind[1] * 2,
-                ind[1] * 2 + 1,
-                ind[2] * 2,
-                ind[2] * 2 + 1,
-            ];
+        for i in 0..self.mesh.n_pris() {
+            let indices = self.mesh.primitive_to_ind_vector(i);
             vert_vec
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = x[*i]);
 
-            let inv_mat = self.ma_invs[i];
-            let square = self.volumes[i];
+            let inv_mat = self.mesh.m_inv(i);
+            let square = self.mesh.volume(i);
             energy_function!(vert_vec, ene, mat, inv_mat, square, f64);
             res += ene;
         }
@@ -143,28 +139,30 @@ impl Problem for Elastic {
     fn gradient(&self, x: &DVector<f64>) -> Option<DVector<f64>> {
         let mut vert_vec = SVector::<f64, 6>::zeros();
         let mut res = DVector::zeros(x.len());
-        for i in 0..self.n_prims {
-            let ind = self.prim_connected_vert_indices[i];
-            let indices = vec![
-                ind[0] * 2,
-                ind[0] * 2 + 1,
-                ind[1] * 2,
-                ind[1] * 2 + 1,
-                ind[2] * 2,
-                ind[2] * 2 + 1,
-            ];
-
+        let mut mark_list = self.mark_list.borrow_mut();
+        mark_list.clear();
+        for i in 0..self.mesh.n_pris() {
+            let indices = self.mesh.primitive_to_ind_vector(i);
             vert_vec
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = x[*i]);
-            let vert_gradient_vec = vector_to_gradients(vert_vec);
+            let vert_gradient_vec = vector_to_gradients(&vert_vec);
 
-            let inv_mat = self.ma_invs[i];
-            let inv_mat = constant_matrix_to_gradients(inv_mat);
-            let square = self.volumes[i];
+            let inv_mat = self.mesh.m_inv(i);
+            let inv_mat = constant_matrix_to_gradients(&inv_mat);
+            let square = self.mesh.volume(i);
             energy_function!(vert_gradient_vec, ene, mat, inv_mat, square, Gradient<6>);
             let grad = ene.gradient();
+
+            // Magic Here Starts
+            // print!("magic {}\n",(&grad - &self.gradient_list.borrow()[i]).norm());
+            if (&grad - &self.gradient_list.borrow()[i]).norm() < 0.01 {
+                mark_list.insert(i);
+            } else {
+                self.gradient_list.borrow_mut()[i] = grad.clone();
+            }
+            // Magic Here Ends
             indices
                 .iter()
                 .zip(grad.iter())
@@ -176,42 +174,43 @@ impl Problem for Elastic {
     fn hessian(&self, x: &DVector<f64>) -> Option<CooMatrix<f64>> {
         let mut vert_vec = SVector::<f64, 6>::zeros();
         let mut res = CooMatrix::<f64>::new(x.len(), x.len());
-
-        for i in 0..self.n_prims {
-            let ind = self.prim_connected_vert_indices[i];
-            let indices = vec![
-                ind[0] * 2,
-                ind[0] * 2 + 1,
-                ind[1] * 2,
-                ind[1] * 2 + 1,
-                ind[2] * 2,
-                ind[2] * 2 + 1,
-            ];
-            vert_vec
-                .iter_mut()
-                .zip(indices.iter())
-                .for_each(|(g_i, i)| *g_i = x[*i]);
-            let vert_gradient_vec = vector_to_hessians(vert_vec);
-            let inv_mat = self.ma_invs[i];
-            let inv_mat = constant_matrix_to_hessians(inv_mat);
-            let square = self.volumes[i];
-            energy_function!(vert_gradient_vec, ene, mat, inv_mat, square, Hessian<6>);
-            let small_hessian = ene.hessian();
+        let mut count = 0;
+        for i in 0..self.mesh.n_pris() {
+            let small_hessian;
+            let indices = self.mesh.primitive_to_ind_vector(i);
+            if self.mark_list.borrow().contains(&i) {
+                small_hessian = self.hessian_list.borrow()[i];
+                count += 1;
+            } else {
+                vert_vec
+                    .iter_mut()
+                    .zip(indices.iter())
+                    .for_each(|(g_i, i)| *g_i = x[*i]);
+                let vert_gradient_vec = vector_to_hessians(&vert_vec);
+                let inv_mat = self.mesh.m_inv(i);
+                let inv_mat = constant_matrix_to_hessians(&inv_mat);
+                let square = self.mesh.volume(i);
+                energy_function!(vert_gradient_vec, ene, mat, inv_mat, square, Hessian<6>);
+                small_hessian = ene.hessian();
+                self.hessian_list.borrow_mut()[i] = small_hessian.clone();
+            }
             for i in 0..6 {
                 for j in 0..6 {
                     res.push(indices[i], indices[j], small_hessian[(i, j)]);
                 }
             }
         }
+        println!("speed up hessian: {}", count);
         Some(res)
     }
 }
 
 pub struct BouncingScenario {
+    x_old: DVector<f64>,
     inertia: Inertia,
     elastic: Elastic,
     bounce: Bounce,
-    plane: Mesh2d,
+    plane: Plane,
     dt: f64,
     name: String,
 }
@@ -236,9 +235,9 @@ impl Problem for BouncingScenario {
 
     fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
         let mut res = CooMatrix::<f64>::new(x.len(), x.len());
-        res = res + self.inertia.hessian(x)?;
-        res = res + self.elastic.hessian(x)?;
-        res = res + self.bounce.hessian(x)?;
+        res = res + self.inertia.hessian(x).unwrap();
+        res = res + self.elastic.hessian(x).unwrap();
+        res = res + self.bounce.hessian(x).unwrap();
         Some(res)
     }
 }
@@ -249,16 +248,19 @@ impl ScenarioProblem for BouncingScenario {
         self.inertia.x_tao.clone()
     }
     fn set_all_vertices_vector(&mut self, vertices: DVector<f64>) {
-        let velocity = (&vertices - &self.plane.verts) / self.dt;
-        self.plane.velos = velocity;
-        self.plane.verts = vertices;
+        let velocity = (&vertices - &self.x_old) / self.dt;
+        // velocity *= 0.995;
+        self.plane.set_all_velocities_vector(velocity);
+        self.plane.set_all_vertices_vector(vertices);
     }
     fn save_to_file(&self, frame: usize) {
         self.plane
             .save_to_obj(format!("output/{}{}.obj", self.name, frame));
     }
     fn frame_init(&mut self) {
-        self.inertia.x_tao = &self.plane.verts + self.dt * &self.plane.velos;
+        self.x_old = self.plane.all_vertices_to_vector();
+        let v_old = self.plane.all_velocities_to_vector();
+        self.inertia.x_tao = &self.x_old + self.dt * &v_old;
     }
 }
 
@@ -266,36 +268,35 @@ impl BouncingScenario {
     pub fn new() -> Self {
         let r = 10;
         let c = 10;
-        // let mut p = circle(5.0, 64, None);
-        let mut p = plane(r, c, None);
-        let vec = &mut p.verts;
+        let mut p = Plane::new(r, c);
+        let mut vec = p.all_vertices_to_vector();
 
-        let mut g_vec = DVector::zeros(2 * p.n_verts);
-        for i in 0..p.n_verts {
+        let mut g_vec = DVector::zeros(p.dim() * p.n_verts());
+        for i in 0..p.n_verts() {
             g_vec[2 * i + 1] = -9.8;
             vec[2 * i + 1] += 1.0;
         }
-        #[cfg(feature = "save")]
-        p.save_to_obj(format!("output/Bounce0.obj"));
+        p.set_all_vertices_vector(vec);
+        p.save_to_obj(format!("output/BounceNew0.obj"));
 
         Self {
             dt: 0.01,
-
-            name: String::from("Bounce"),
+            plane: p.clone(),
+            name: String::from("BounceNew"),
+            x_old: DVector::<f64>::zeros(1),
             inertia: Inertia {
                 x_tao: DVector::<f64>::zeros(1),
-                g_vec,
+                g_vec: g_vec,
                 dt: 0.01,
-                mass: CooMatrix::from(&DMatrix::from_diagonal(&p.masss)),
+                mass: p.mass_matrix(),
             },
-
             elastic: Elastic {
-                n_prims: p.n_prims,
-                prim_connected_vert_indices: p.prim_connected_vert_indices.clone(),
-                volumes: p.volumes.clone(),
-                ma_invs: p.ma_invs.clone(),
+                mark_list: RefCell::new(HashSet::new()),
+                energy_list: RefCell::new(vec![0.0; p.n_pris()]),
+                gradient_list: RefCell::new(vec![SVector::<f64, 6>::zeros(); p.n_pris()]),
+                hessian_list: RefCell::new(vec![SMatrix::<f64, 6, 6>::zeros(); p.n_pris()]),
+                mesh: p,
             },
-            plane: p,
             bounce: Bounce { keta: KETA },
         }
     }

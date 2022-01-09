@@ -85,7 +85,6 @@ impl<P: PreConditioner> LinearSolver for NewtonCG<P> {
             r -= alpha * (A.mul(&p));
 
             if r.norm() < 0.001 {
-                // print!("{}, {} ", i, r.norm());
                 return x;
             }
             z = m_inv.mul(&r);
@@ -94,7 +93,6 @@ impl<P: PreConditioner> LinearSolver for NewtonCG<P> {
 
             p = &z + beta * &p;
             numerate = new_num;
-            // println!("{}", r.norm());
         }
         x
     }

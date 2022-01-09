@@ -20,7 +20,7 @@ impl<P: Problem> LineSearch<P> for SimpleLineSearch {
         while pro.apply(current) < pro.apply(&(current - scalar * &dir)) {
             scalar *= self.alpha;
         }
-        print!("scalar {}\n", scalar);
+        println!("scalar {}", scalar);
         scalar * dir
     }
 }
