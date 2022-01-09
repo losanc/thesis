@@ -207,16 +207,17 @@ impl Problem for Elastic {
     }
 }
 
-pub struct BouncingScenario {
+pub struct bouncingupdateScenario {
     inertia: Inertia,
     elastic: Elastic,
     bounce: Bounce,
     plane: Mesh2d,
     dt: f64,
     name: String,
+    update_list: Vec<usize>,
 }
 
-impl Problem for BouncingScenario {
+impl Problem for bouncingupdateScenario {
     type HessianType = CooMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
         let mut res = 0.0;
@@ -243,7 +244,7 @@ impl Problem for BouncingScenario {
     }
 }
 
-impl ScenarioProblem for BouncingScenario {
+impl ScenarioProblem for bouncingupdateScenario {
     fn initial_guess(&self) -> DVector<f64> {
         // TODO
         self.inertia.x_tao.clone()
@@ -262,7 +263,7 @@ impl ScenarioProblem for BouncingScenario {
     }
 }
 
-impl BouncingScenario {
+impl bouncingupdateScenario {
     pub fn new() -> Self {
         let r = 10;
         let c = 10;
@@ -276,12 +277,12 @@ impl BouncingScenario {
             vec[2 * i + 1] += 1.0;
         }
         #[cfg(feature = "save")]
-        p.save_to_obj(format!("output/bouncing0.obj"));
+        p.save_to_obj(format!("output/bouncingupdate0.obj"));
 
         Self {
             dt: 0.01,
 
-            name: String::from("bouncing1"),
+            name: String::from("bouncingupdate1"),
             inertia: Inertia {
                 x_tao: DVector::<f64>::zeros(1),
                 g_vec,
