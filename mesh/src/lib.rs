@@ -1,65 +1,147 @@
-pub use self::plane::Plane;
-use nalgebra as na;
+use nalgebra::{DVector, SMatrix};
+
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
-mod plane;
-use nalgebra::SMatrix;
+mod dim2;
+pub use dim2::*;
 
-// D = T+1
-// because rust doesn't support const generic operation yet
-pub trait MeshType<const T: usize, const D: usize> {
-    // /// primitive elastic energy
-    // type PriType;
+// D = T - 1, because rust doesn't support const generic operations yet
+pub struct Mesh<const D: usize, const T: usize> {
+    // basic information
+    pub n_verts: usize,
+    pub n_prims: usize,
 
-    // /// primitive elastic energy wrt. to each vertex coordiante gradient
-    // type GradientPriType;
-    // /// primitive elastic energy wrt. to each vertex coordiante gradient
-    // type HessianPriType;
+    // attributes for each vertex coordiants
+    // length = n_verts* self.dim()
+    pub verts: DVector<f64>,
+    pub velos: DVector<f64>,
+    pub accls: DVector<f64>,
+    pub masss: DVector<f64>,
 
-    // /// vector of primitive vertex coordiante
-    // type PriVecType;
-    // /// vector of primitive vertex coordiante  as gradient
-    // type GradientPriVecType;
-    // /// vector of primitive vertex coordiante  as hessian
-    // type HessianPriVecType;
+    // attributes for each face, no need to use DVector here, Vec is enough
+    // length = n_prims
+    pub volumes: Vec<f64>,
+    pub ma_invs: Vec<SMatrix<f64, D, D>>,
 
-    /// mass matrix type
-    type MassMatrixType;
+    // connectivity information
+    pub prim_connected_vert_indices: Vec<[usize; T]>,
+    pub vert_connected_prim_indices: Vec<Vec<usize>>,
+}
 
+impl<const D: usize, const T: usize> Mesh<D, T> {
     #[inline]
-    fn dim(&self) -> usize {
-        T
+    pub fn dim(&self) -> usize {
+        D
     }
+    pub fn save_to_obj<P: AsRef<Path>>(&self, path: P) {
+        let mut file = File::create(path).unwrap();
+        writeln!(file, "g obj").unwrap();
+        let dim = self.dim();
 
-    fn indices(&self) -> Vec<[usize; D]>;
-    fn n_verts(&self) -> usize;
-    fn n_fixed_verts(&self) -> usize;
-    fn n_pris(&self) -> usize;
-    fn m_inv(&self, i: usize) -> SMatrix<f64, T, T>;
-    fn volume(&self, i: usize) -> f64;
+        if dim == 2 {
+            // 2D(triangle) Mesh
+            for i in 0..self.n_verts {
+                writeln!(
+                    file,
+                    "v  {}  {}  {} ",
+                    self.verts[i * 2],
+                    self.verts[i * 2 + 1],
+                    0.0
+                )
+                .unwrap();
+            }
+            writeln!(file).unwrap();
+            for inds in self.prim_connected_vert_indices.iter() {
+                writeln!(
+                    file,
+                    "f  {}  {}  {} ",
+                    inds[0] + 1,
+                    inds[1] + 1,
+                    inds[2] + 1
+                )
+                .unwrap();
+            }
+        } else {
+            // 3D(tetrahedron) Mesh
+            for i in 0..self.n_verts {
+                writeln!(
+                    file,
+                    "v  {}  {}  {} ",
+                    self.verts[i * 3],
+                    self.verts[i * 3 + 1],
+                    self.verts[i * 3 + 2]
+                )
+                .unwrap();
+            }
+            writeln!(file).unwrap();
+            // TODO: solve the normal of face direction
+            // Currently, it works fine with blender, since blender adds face on both side
+            for inds in self.prim_connected_vert_indices.iter() {
+                writeln!(
+                    file,
+                    "f  {}  {}  {} ",
+                    inds[0] + 1,
+                    inds[1] + 1,
+                    inds[2] + 1
+                )
+                .unwrap();
 
-    /// get verteices vector of all vertices
-    fn all_vertices_to_vector(&self) -> na::DVector<f64>;
+                writeln!(
+                    file,
+                    "f  {}  {}  {} ",
+                    inds[0] + 1,
+                    inds[1] + 1,
+                    inds[3] + 1
+                )
+                .unwrap();
 
-    fn all_velocities_to_vector(&self) -> na::DVector<f64>;
+                writeln!(
+                    file,
+                    "f  {}  {}  {} ",
+                    inds[0] + 1,
+                    inds[2] + 1,
+                    inds[3] + 1
+                )
+                .unwrap();
 
-    /// set verteices vector of all vertices
-    fn set_all_vertices_vector(&mut self, vec: na::DVector<f64>);
+                writeln!(
+                    file,
+                    "f  {}  {}  {} ",
+                    inds[1] + 1,
+                    inds[2] + 1,
+                    inds[3] + 1
+                )
+                .unwrap();
+            }
+        }
+    }
+}
 
-    /// set velocities vector of all vertices
-    fn set_all_velocities_vector(&mut self, vec: na::DVector<f64>);
+/// calculates the area of triangle
+#[inline]
+pub fn area(x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) -> f64 {
+    return 0.5 * ((x1 - x3) * (y2 - y1) - (x1 - x2) * (y3 - y1)).abs();
+}
 
-    fn mass_matrix(&self) -> Self::MassMatrixType;
-
-    /// get a primitive verteices vector of primitive
-    fn primitive_to_ind_vector(&self, index: usize) -> Vec<usize>;
-
-    /// save object to obj file
-    fn save_to_obj<P: AsRef<Path>>(&self, path: P);
-
-    // /// returns the energy of a primitive(e.g. tet or triangle) as f64 number
-    // fn primitive_elastic_energy(&self, index: usize) -> Self::PriType;
-    // /// returns the energy of a primitive(e.g. tet or triangle) as gradient
-    // fn primitive_elastic_energy_gradient(&self, index: usize) -> Self::GradientPriType;
-    // /// returns the energy of a primitive(e.g. tet or triangle) as hessian
-    // fn primitive_elastic_energy_hessian(&self, index: usize) -> Self::HessianPriType;
+/// calcuates the volume of tet
+#[inline]
+pub fn volume(
+    x1: f64,
+    y1: f64,
+    z1: f64,
+    x2: f64,
+    y2: f64,
+    z2: f64,
+    x3: f64,
+    y3: f64,
+    z3: f64,
+    x4: f64,
+    y4: f64,
+    z4: f64,
+) -> f64 {
+    return ((x4 - x1) * ((y2 - y1) * (z3 - z1) - (z2 - z1) * (y3 - y1))
+        + (y4 - y1) * ((z2 - z1) * (x3 - x1) - (x2 - x1) * (z3 - z1))
+        + (z4 - z1) * ((x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1)))
+        / 6.0;
 }
