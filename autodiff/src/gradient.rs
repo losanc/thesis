@@ -203,7 +203,7 @@ impl<const N: usize> From<Gradient<N>> for f64 {
 
 // ----------------vector constructions begin
 
-pub fn vector_to_gradients<const N: usize>(vec: &SVector<f64, N>) -> SVector<Gradient<N>, N> {
+pub fn vector_to_gradients<const N: usize>(vec: SVector<f64, N>) -> SVector<Gradient<N>, N> {
     let mut res = SVector::<Gradient<N>, N>::zeros();
     for i in 0..N {
         res[i].value = vec[i];
@@ -213,7 +213,7 @@ pub fn vector_to_gradients<const N: usize>(vec: &SVector<f64, N>) -> SVector<Gra
 }
 
 pub fn constant_matrix_to_gradients<const M: usize, const N: usize, const P: usize>(
-    vec: &SMatrix<f64, M, N>,
+    vec: SMatrix<f64, M, N>,
 ) -> SMatrix<Gradient<P>, M, N> {
     let mut res = SMatrix::<Gradient<P>, M, N>::zeros();
     for (i, j) in vec.iter().zip(res.iter_mut()) {
@@ -223,7 +223,7 @@ pub fn constant_matrix_to_gradients<const M: usize, const N: usize, const P: usi
 }
 
 pub fn gradients_to_vector<const M: usize, const N: usize, const P: usize>(
-    vec: &SMatrix<Gradient<P>, M, N>,
+    vec: SMatrix<Gradient<P>, M, N>,
 ) -> SMatrix<f64, M, N> {
     let mut res = SMatrix::<f64, M, N>::zeros();
     for (i, j) in vec.iter().zip(res.iter_mut()) {

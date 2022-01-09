@@ -226,7 +226,7 @@ impl<const N: usize> From<Hessian<N>> for f64 {
 
 // ----------------vector constructions begin
 
-pub fn vector_to_hessians<const N: usize>(vec: &SVector<f64, N>) -> SVector<Hessian<N>, N> {
+pub fn vector_to_hessians<const N: usize>(vec: SVector<f64, N>) -> SVector<Hessian<N>, N> {
     let mut res = SVector::<Hessian<N>, N>::zeros();
     for i in 0..N {
         res[i].value = vec[i];
@@ -236,7 +236,7 @@ pub fn vector_to_hessians<const N: usize>(vec: &SVector<f64, N>) -> SVector<Hess
 }
 
 pub fn constant_matrix_to_hessians<const M: usize, const N: usize, const P: usize>(
-    vec: &SMatrix<f64, M, N>,
+    vec: SMatrix<f64, M, N>,
 ) -> SMatrix<Hessian<P>, M, N> {
     let mut res = SMatrix::<Hessian<P>, M, N>::zeros();
     for (i, j) in vec.iter().zip(res.iter_mut()) {
@@ -246,7 +246,7 @@ pub fn constant_matrix_to_hessians<const M: usize, const N: usize, const P: usiz
 }
 
 pub fn hessians_to_vector<const M: usize, const N: usize, const P: usize>(
-    vec: &SMatrix<Hessian<P>, M, N>,
+    vec: SMatrix<Hessian<P>, M, N>,
 ) -> SMatrix<f64, M, N> {
     let mut res = SMatrix::<f64, M, N>::zeros();
     for (i, j) in vec.iter().zip(res.iter_mut()) {
