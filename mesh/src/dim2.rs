@@ -111,6 +111,7 @@ pub fn plane(r: usize, c: usize, d: Option<f64>) -> Mesh<2, 3> {
     Mesh {
         n_verts: r * c,
         n_prims: count,
+        surface: None,
 
         verts: verts,
         velos: DVector::<f64>::zeros(2 * r * c),
@@ -182,6 +183,7 @@ pub fn circle(r: f64, s: usize, d: Option<f64>) -> Mesh<2, 3> {
     Mesh {
         n_verts: n_verts,
         n_prims: n_prims,
+        surface: None,
 
         verts: verts,
         velos: DVector::<f64>::zeros(2 * n_verts),

@@ -7,10 +7,15 @@ mod dim2;
 pub use dim2::*;
 
 // D = T - 1, because rust doesn't support const generic operations yet
+#[derive(Clone)]
 pub struct Mesh<const D: usize, const T: usize> {
     // basic information
     pub n_verts: usize,
     pub n_prims: usize,
+
+    // optional, only valid for 3d mesh
+    // for 2d mesh, can be directly accessed by prim_connected_vert_indices
+    pub surface: Option<Vec<[usize; T]>>,
 
     // attributes for each vertex coordiants
     // length = n_verts* self.dim()
@@ -29,91 +34,61 @@ pub struct Mesh<const D: usize, const T: usize> {
     pub vert_connected_prim_indices: Vec<Vec<usize>>,
 }
 
-impl<const D: usize, const T: usize> Mesh<D, T> {
-    #[inline]
-    pub fn dim(&self) -> usize {
-        D
-    }
+pub type Mesh2d = Mesh<2,3>;
+pub type Mesh3d = Mesh<3,4>;
+
+impl Mesh2d {
     pub fn save_to_obj<P: AsRef<Path>>(&self, path: P) {
         let mut file = File::create(path).unwrap();
         writeln!(file, "g obj").unwrap();
-        let dim = self.dim();
+        for i in 0..self.n_verts {
+            writeln!(
+                file,
+                "v  {}  {}  {} ",
+                self.verts[i * 2],
+                self.verts[i * 2 + 1],
+                0.0
+            )
+            .unwrap();
+        }
+        writeln!(file).unwrap();
+        for inds in self.prim_connected_vert_indices.iter() {
+            writeln!(
+                file,
+                "f  {}  {}  {} ",
+                inds[0] + 1,
+                inds[1] + 1,
+                inds[2] + 1
+            )
+            .unwrap();
+        }
+    }
+}
 
-        if dim == 2 {
-            // 2D(triangle) Mesh
-            for i in 0..self.n_verts {
-                writeln!(
-                    file,
-                    "v  {}  {}  {} ",
-                    self.verts[i * 2],
-                    self.verts[i * 2 + 1],
-                    0.0
-                )
-                .unwrap();
-            }
-            writeln!(file).unwrap();
-            for inds in self.prim_connected_vert_indices.iter() {
-                writeln!(
-                    file,
-                    "f  {}  {}  {} ",
-                    inds[0] + 1,
-                    inds[1] + 1,
-                    inds[2] + 1
-                )
-                .unwrap();
-            }
-        } else {
-            // 3D(tetrahedron) Mesh
-            for i in 0..self.n_verts {
-                writeln!(
-                    file,
-                    "v  {}  {}  {} ",
-                    self.verts[i * 3],
-                    self.verts[i * 3 + 1],
-                    self.verts[i * 3 + 2]
-                )
-                .unwrap();
-            }
-            writeln!(file).unwrap();
-            // TODO: solve the normal of face direction
-            // Currently, it works fine with blender, since blender adds face on both side
-            for inds in self.prim_connected_vert_indices.iter() {
-                writeln!(
-                    file,
-                    "f  {}  {}  {} ",
-                    inds[0] + 1,
-                    inds[1] + 1,
-                    inds[2] + 1
-                )
-                .unwrap();
-
-                writeln!(
-                    file,
-                    "f  {}  {}  {} ",
-                    inds[0] + 1,
-                    inds[1] + 1,
-                    inds[3] + 1
-                )
-                .unwrap();
-
-                writeln!(
-                    file,
-                    "f  {}  {}  {} ",
-                    inds[0] + 1,
-                    inds[2] + 1,
-                    inds[3] + 1
-                )
-                .unwrap();
-
-                writeln!(
-                    file,
-                    "f  {}  {}  {} ",
-                    inds[1] + 1,
-                    inds[2] + 1,
-                    inds[3] + 1
-                )
-                .unwrap();
-            }
+impl Mesh3d {
+    pub fn save_to_obj<P: AsRef<Path>>(&self, path: P) {
+        let mut file = File::create(path).unwrap();
+        writeln!(file, "g obj").unwrap();
+        for i in 0..self.n_verts {
+            writeln!(
+                file,
+                "v  {}  {}  {} ",
+                self.verts[i * 2],
+                self.verts[i * 2 + 1],
+                0.0
+            )
+            .unwrap();
+        }
+        writeln!(file).unwrap();
+        for inds in self.surface.as_ref().unwrap().iter() {
+            writeln!(
+                file,
+                "f  {}  {}  {} ",
+                inds[0] + 1,
+                inds[1] + 1,
+                inds[2] + 1
+            )
+            .unwrap();
         }
     }
 }
