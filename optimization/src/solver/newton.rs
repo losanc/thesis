@@ -1,6 +1,5 @@
 use crate::LineSearch;
 use crate::LinearSolver;
-use crate::MatrixType;
 use crate::Problem;
 use crate::Solver;
 

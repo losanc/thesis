@@ -1,3 +1,4 @@
+/// *Simple* *L*ine *S*earch
 use crate::LineSearch;
 use crate::Problem;
 use na::DVector;
