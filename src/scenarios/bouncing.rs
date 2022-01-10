@@ -5,8 +5,6 @@ use na::DVector;
 use nalgebra as na;
 use nalgebra::SVector;
 use nalgebra::{DMatrix, SMatrix};
-use nalgebra_sparse as nas;
-use nas::CooMatrix;
 use num::{One, Zero};
 use optimization::Problem;
 use std::string::String;
@@ -41,7 +39,7 @@ struct Inertia {
     x_tao: DVector<f64>,
     g_vec: DVector<f64>,
     dt: f64,
-    mass: CooMatrix<f64>,
+    mass: DMatrix<f64>,
 }
 
 struct Elastic {
@@ -56,7 +54,7 @@ struct Bounce {
 }
 
 impl Problem for Inertia {
-    type HessianType = CooMatrix<f64>;
+    type HessianType = DMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
         let temp = x - &self.x_tao - &self.g_vec * (self.dt * self.dt);
         let res = temp.dot(&(&self.mass * &temp));
@@ -68,13 +66,13 @@ impl Problem for Inertia {
         Some(res_grad / (self.dt * self.dt))
     }
 
-    fn hessian(&self, _x: &DVector<f64>) -> Option<CooMatrix<f64>> {
+    fn hessian(&self, _x: &DVector<f64>) -> Option<Self::HessianType> {
         Some(&self.mass / (self.dt * self.dt))
     }
 }
 
 impl Problem for Bounce {
-    type HessianType = CooMatrix<f64>;
+    type HessianType = DMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
         let mut res = 0.0;
         x.iter().skip(1).step_by(2).for_each(|x_i| {
@@ -98,15 +96,16 @@ impl Problem for Bounce {
             });
         Some(res)
     }
-    fn hessian(&self, x: &DVector<f64>) -> Option<CooMatrix<f64>> {
-        let mut res = CooMatrix::new(x.len(), x.len());
+    fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
+        let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         x.iter()
             .enumerate()
             .skip(1)
             .step_by(2)
             .for_each(|(i_i, x_i)| {
                 if *x_i < 0.0 {
-                    res.push(i_i, i_i, -6.0 * self.keta * x_i);
+                    // res.push(i_i, i_i, -6.0 * self.keta * x_i);
+                    res[(i_i, i_i)] = -6.0 * self.keta * x_i;
                 }
             });
         Some(res)
@@ -114,7 +113,7 @@ impl Problem for Bounce {
 }
 
 impl Problem for Elastic {
-    type HessianType = CooMatrix<f64>;
+    type HessianType = DMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
         let mut vert_vec = SVector::<f64, 6>::zeros();
         let mut res = 0.0;
@@ -173,9 +172,9 @@ impl Problem for Elastic {
         Some(res)
     }
 
-    fn hessian(&self, x: &DVector<f64>) -> Option<CooMatrix<f64>> {
+    fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
         let mut vert_vec = SVector::<f64, 6>::zeros();
-        let mut res = CooMatrix::<f64>::new(x.len(), x.len());
+        let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
 
         for i in 0..self.n_prims {
             let ind = self.prim_connected_vert_indices[i];
@@ -199,7 +198,8 @@ impl Problem for Elastic {
             let small_hessian = ene.hessian();
             for i in 0..6 {
                 for j in 0..6 {
-                    res.push(indices[i], indices[j], small_hessian[(i, j)]);
+                    // res.push(indices[i], indices[j], small_hessian[(i, j)]);
+                    res[(indices[i], indices[j])] = small_hessian[(i, j)];
                 }
             }
         }
@@ -217,7 +217,7 @@ pub struct BouncingScenario {
 }
 
 impl Problem for BouncingScenario {
-    type HessianType = CooMatrix<f64>;
+    type HessianType = DMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
         let mut res = 0.0;
         res += self.inertia.apply(x);
@@ -235,7 +235,7 @@ impl Problem for BouncingScenario {
     }
 
     fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
-        let mut res = CooMatrix::<f64>::new(x.len(), x.len());
+        let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res = res + self.inertia.hessian(x)?;
         res = res + self.elastic.hessian(x)?;
         res = res + self.bounce.hessian(x)?;
@@ -286,7 +286,7 @@ impl BouncingScenario {
                 x_tao: DVector::<f64>::zeros(1),
                 g_vec,
                 dt: 0.01,
-                mass: CooMatrix::from(&DMatrix::from_diagonal(&p.masss)),
+                mass: DMatrix::from_diagonal(&p.masss),
             },
 
             elastic: Elastic {
