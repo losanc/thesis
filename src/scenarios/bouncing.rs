@@ -104,8 +104,7 @@ impl Problem for Bounce {
             .step_by(2)
             .for_each(|(i_i, x_i)| {
                 if *x_i < 0.0 {
-                    // res.push(i_i, i_i, -6.0 * self.keta * x_i);
-                    res[(i_i, i_i)] = -6.0 * self.keta * x_i;
+                    res[(i_i, i_i)] += -6.0 * self.keta * x_i;
                 }
             });
         Some(res)
@@ -198,8 +197,7 @@ impl Problem for Elastic {
             let small_hessian = ene.hessian();
             for i in 0..6 {
                 for j in 0..6 {
-                    // res.push(indices[i], indices[j], small_hessian[(i, j)]);
-                    res[(indices[i], indices[j])] = small_hessian[(i, j)];
+                    res[(indices[i], indices[j])] += small_hessian[(i, j)];
                 }
             }
         }
