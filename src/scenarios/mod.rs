@@ -1,7 +1,7 @@
-mod bouncing;
-// mod bouncingupdate;
-pub use bouncing::BouncingScenario;
-// pub use bouncingupdate::BouncingUpdateScenario;
+// mod bouncing;
+mod bouncingupdate;
+// pub use bouncing::BouncingScenario;
+pub use bouncingupdate::BouncingUpdateScenario as BouncingScenario;
 use na::DVector;
 use nalgebra as na;
 use optimization::LineSearch;
@@ -13,6 +13,7 @@ pub trait ScenarioProblem: Problem {
     fn initial_guess(&self) -> DVector<f64>;
     fn set_all_vertices_vector(&mut self, vertices: DVector<f64>);
     fn save_to_file(&self, frame: usize);
+    fn frame_end(&mut self);
 }
 
 pub struct Scenario<
@@ -55,6 +56,7 @@ where
             .solve(&self.problem, &self.linearsolver, &self.ls, &self.x);
         self.problem.set_all_vertices_vector(res);
         self.frame += 1;
+        self.problem.frame_end();
         println!("Frame: {}", self.frame);
         #[cfg(feature = "save")]
         self.problem.save_to_file(self.frame);
