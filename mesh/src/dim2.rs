@@ -55,16 +55,15 @@ pub fn plane(r: usize, c: usize, d: Option<f64>) -> Mesh<2, 3> {
     //     c  c+1...
     //     |   |   |   |
     // 0   -------------
-    //   0   1   2   c-1
+    //     0   1   2   c-1
 
     let get_index = |r_ind: usize, c_ind: usize| -> usize { r_ind * c + c_ind };
 
-    // let mut vers = Vec::<SVector<f64, 2>>::new();
     let verts = DVector::from_fn(2 * r * c, |i, _| {
         if i % 2 == 1 {
-            (((i - 1) / 2) % c) as f64
+            (((i - 1) / 2) / r) as f64
         } else {
-            ((i / 2) / c) as f64
+            ((i / 2) % r) as f64
         }
     });
 
