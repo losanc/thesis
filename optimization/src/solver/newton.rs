@@ -18,8 +18,9 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
         let mut res = input.clone();
         while g.norm() > 0.1 {
             h = p.hessian(&res).unwrap();
-            println!("gradient norm{}", g.norm());
+            // println!("gradient norm{}", g.norm());
             let delta = lin.solve(&h, &g);
+            // print!("linear residual")
             let delta = ls.search(p, &res, delta);
             res -= delta;
             g = p.gradient(&res).unwrap();

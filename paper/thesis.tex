@@ -29,32 +29,32 @@ This is a reference~\cite{Foley:1990}.
 
 \section{Related Work 1}
 
-\begin{figure}[tb]
-	\centering
-	\includegraphics[width=0.5\linewidth]{images/image}
-	\caption{\label{fig:image} This is an image.
-	}
-\end{figure}
+% \begin{figure}[tb]
+% 	\centering
+% 	\includegraphics[width=0.5\linewidth]{images/image}
+% 	\caption{\label{fig:image} This is an image.
+% 	}
+% \end{figure}
 
-\begin{table}[tb]
-	{
-		\centering
-		\begin{tabular}{|c|c|c|c|}
-			\hline
-			      & col 1 & col 2 & col 3 \\
-			\hline	
-			row 1 & 1     & 2     & 3     \\
-			row 2 & 4     & 5     & 6     \\
-			row 3 & 7     & 8     & 9     \\
-			\hline
-		\end{tabular}
-		\caption{\label{tab:example} This is a table.}
-	}
-\end{table}
+% \begin{table}[tb]
+% 	{
+% 		\centering
+% 		\begin{tabular}{|c|c|c|c|}
+% 			\hline
+% 			      & col 1 & col 2 & col 3 \\
+% 			\hline	
+% 			row 1 & 1     & 2     & 3     \\
+% 			row 2 & 4     & 5     & 6     \\
+% 			row 3 & 7     & 8     & 9     \\
+% 			\hline
+% 		\end{tabular}
+% 		\caption{\label{tab:example} This is a table.}
+% 	}
+% \end{table}
 
 
-Figure~\ref{fig:image} shows an example of an image.
-Table~\ref{tab:example} shows an example of a table.
+% Figure~\ref{fig:image} shows an example of an image.
+% Table~\ref{tab:example} shows an example of a table.
 
 
 \chapter{TECHNICAL BACKGROUND}
@@ -62,8 +62,24 @@ Table~\ref{tab:example} shows an example of a table.
 \section{Backward Euler}
 \section{Minimization Problem}
 \chapter{FAST HESSIAN ESTIMATION}
-\section{Skip Hessian}
-\section{Hessian}
+\section{Global Hessian}
+
+
+
+\section{Component-wise Hessian}
+\subsection{Inertia}
+\subsection{Collision}
+\subsection{Elastic}
+\chapter{Optimization}
+\section{Sparse Matrix and Linear Solver}
+
+
+In general, hessian matrix used in FEM simulation is a sparse matrix. More precisely, the structure of the matrix is decided by the connectivity of the mesh structure.
+
+From above, I have shown that a global hessian can be decomposed as three parts, mass matrix, stiffness matrix
+
+For example, given a triangle mesh, we pick one vertex $A$ from the mesh, use $X_A$, $Y_A$ to denote the coordiantes of $A$ correspondingly, 
+
 \chapter{SIMULATION RESULT}
 \section{Scenario Setup}
 \section{Some Analysis}

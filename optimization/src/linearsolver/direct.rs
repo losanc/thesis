@@ -27,8 +27,6 @@ impl LinearSolver for PivLU {
     fn solve(&self, A: &Self::MatrixType, b: &DVector<f64>) -> DVector<f64> {
         let dec = A.clone().full_piv_lu();
         let res = dec.solve(b).unwrap();
-        println!("linear residule : {}", (A * &res - b).norm());
-
         res
     }
 }

@@ -177,7 +177,6 @@ impl Problem for Elastic {
     }
 
     fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
-        let mut old_hessian_list = self.old_hessian_list.try_borrow_mut().unwrap();
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
 
         let update_list = self
@@ -192,6 +191,8 @@ impl Problem for Elastic {
             .collect::<HashSet<usize>>();
 
         let mut vert_vec = SVector::<f64, 6>::zeros();
+
+        println!("{:?}",update_triangle_list.len());
 
         for i in 0..self.n_prims {
             let small_hessian;
@@ -227,40 +228,6 @@ impl Problem for Elastic {
         }
 
         Some(res)
-        // if old_hessian.nrows() == 1 {
-        //      res = DMatrix::<f64>::zeros(x.len(), x.len());
-        //     let mut vert_vec = SVector::<f64, 6>::zeros();
-
-        //     for i in 0..self.n_prims {
-        //         let ind = self.prim_connected_vert_indices[i];
-        //         let indices = vec![
-        //             ind[0] * 2,
-        //             ind[0] * 2 + 1,
-        //             ind[1] * 2,
-        //             ind[1] * 2 + 1,
-        //             ind[2] * 2,
-        //             ind[2] * 2 + 1,
-        //         ];
-        //         vert_vec
-        //             .iter_mut()
-        //             .zip(indices.iter())
-        //             .for_each(|(g_i, i)| *g_i = x[*i]);
-        //         let vert_gradient_vec = vector_to_hessians(vert_vec);
-        //         let inv_mat = self.ma_invs[i];
-        //         let inv_mat = constant_matrix_to_hessians(inv_mat);
-        //         let square = self.volumes[i];
-        //         energy_function!(vert_gradient_vec, ene, mat, inv_mat, square, Hessian<6>);
-        //         let small_hessian = ene.hessian();
-        //         for i in 0..6 {
-        //             for j in 0..6 {
-        //                 res[(indices[i], indices[j])] = small_hessian[(i, j)];
-        //             }
-        //         }
-        //     }
-        //     old_hessian = res.clone();
-        // } else {
-        //     // let old_hessian = old_hessian.as_mut().unwrap();
-        // }
     }
 }
 
@@ -371,7 +338,7 @@ impl BouncingUpdateScenario {
                 volumes: p.volumes.clone(),
                 ma_invs: p.ma_invs.clone(),
                 update_list: HashSet::<usize>::new(),
-                old_hessian_list: RefCell::<_>::new(Vec::<_>::new()),
+                old_hessian_list: RefCell::<_>::new(vec![SMatrix::<f64, 6, 6>::zeros(); p.n_prims]),
             }),
             plane: p,
             bounce: Bounce { keta: KETA },

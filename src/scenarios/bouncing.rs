@@ -5,13 +5,9 @@ use na::DVector;
 use nalgebra as na;
 use nalgebra::SVector;
 use nalgebra::{DMatrix, SMatrix};
-use nalgebra_sparse::CooMatrix;
 use num::{One, Zero};
 use optimization::Problem;
-use std::cell::RefCell;
-use std::fs::File;
 use std::string::String;
-use std::io::Write;
 
 const E: f64 = 1e6;
 const NU: f64 = 0.33;
@@ -210,15 +206,12 @@ impl Problem for Elastic {
 }
 
 pub struct BouncingScenario {
-    frame: usize,
     inertia: Inertia,
     elastic: Elastic,
     bounce: Bounce,
     plane: Mesh2d,
     dt: f64,
     name: String,
-    last_hessian: RefCell<DMatrix<f64>>,
-    count: RefCell<usize>,
 }
 
 impl Problem for BouncingScenario {
@@ -242,34 +235,8 @@ impl Problem for BouncingScenario {
     fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res = res + self.inertia.hessian(x)?;
-        let elastic_hessian = self.elastic.hessian(x)?;
-        res = res + &elastic_hessian;
+        res = res + self.elastic.hessian(x)?;
         res = res + self.bounce.hessian(x)?;
-        // shen me chui zi yu fa
-        let dense = &elastic_hessian - &*self.last_hessian.try_borrow().unwrap();
-        let mut count = self.count.try_borrow().unwrap().clone();
-        let path = format!("output/matrix/matrix_{}.txt", count);
-        count+=1;
-        self.count.replace(count);
-        let mut file = File::create(path).unwrap();
-        writeln!(file, "frame: {}  ", self.frame).unwrap();
-        for i in 0..dense.ncols() {
-            for j in 0..dense.nrows() {
-                write!(file, "{}  ", dense[(i, j)]).unwrap();
-            }
-            writeln!(file, "");
-        }
-        // let mut coo = CooMatrix::new(dense.nrows(), dense.ncols());
-        // for (index, v) in dense.iter().enumerate() {
-        //     if v.abs() > 1e-3 {
-        //         // We use the fact that matrix iteration is guaranteed to be column-major
-        //         let i = index % dense.nrows();
-        //         let j = index / dense.nrows();
-        //         coo.push(i, j, v.clone());
-        //     }
-        // }
-        // println!("{:?}", coo);
-        self.last_hessian.replace(elastic_hessian);
         Some(res)
     }
 }
@@ -291,30 +258,28 @@ impl ScenarioProblem for BouncingScenario {
     fn frame_init(&mut self) {
         self.inertia.x_tao = &self.plane.verts + self.dt * &self.plane.velos;
     }
-    fn frame_end(&mut self) {
-        self.frame += 1;
+    fn frame_end(&mut self){
+        
     }
 }
 
 impl BouncingScenario {
     pub fn new() -> Self {
-        let r = 5;
-        let c = 5;
-        // let mut p = circle(2.0, 20, None);
+        let r = 10;
+        let c = 10;
+        // let mut p = circle(5.0, 64, None);
         let mut p = plane(r, c, None);
         let vec = &mut p.verts;
 
         let mut g_vec = DVector::zeros(2 * p.n_verts);
         for i in 0..p.n_verts {
             g_vec[2 * i + 1] = -9.8;
-            // vec[2 * i + 1] += 3.0;
             vec[2 * i + 1] += 1.0;
         }
         #[cfg(feature = "save")]
         p.save_to_obj(format!("output/bouncing0.obj"));
 
         Self {
-            frame: 0,
             dt: 0.01,
 
             name: String::from("bouncing1"),
@@ -331,11 +296,8 @@ impl BouncingScenario {
                 volumes: p.volumes.clone(),
                 ma_invs: p.ma_invs.clone(),
             },
-
-            bounce: Bounce { keta: KETA },
-            last_hessian: RefCell::new(DMatrix::<f64>::zeros(2 * p.n_verts, 2 * p.n_verts)),
-            count: RefCell::new(0),
             plane: p,
+            bounce: Bounce { keta: KETA },
         }
     }
 }
