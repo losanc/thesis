@@ -15,7 +15,7 @@ const E: f64 = 1e6;
 const NU: f64 = 0.33;
 const MIU: f64 = E / (2.0 * (1.0 + NU));
 const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-const KETA: f64 = 1e8;
+const KETA: f64 = 1e6;
 
 macro_rules! energy_function {
     ($vec:ident, $ene:ident,$mat:ident,$inv_mat:ident, $square:expr, $type:ty) => {
@@ -168,6 +168,7 @@ pub struct BouncingScenario {
     elastic: Elastic,
     ground: Ground,
     circle: StaticCircle,
+    circle2: StaticCircle,
     plane: Mesh2d,
     dt: f64,
     name: String,
@@ -180,10 +181,13 @@ impl Problem for BouncingScenario {
         res += self.inertia.apply(x);
         res += self.elastic.apply(x);
         for i in 0..self.plane.n_verts {
-            res += self.ground.energy(x.index((2 * i..2 * i + 2, 0)));
+            // res += self.ground.energy(x.index((2 * i..2 * i + 2, 0)));
         }
         for i in 0..self.plane.n_verts {
             res += self.circle.energy(x.index((2 * i..2 * i + 2, 0)));
+        }
+        for i in 0..self.plane.n_verts {
+            res += self.circle2.energy(x.index((2 * i..2 * i + 2, 0)));
         }
         res
     }
@@ -195,12 +199,17 @@ impl Problem for BouncingScenario {
         // res += self.bounce.gradient(x)?;
         for i in 0..self.plane.n_verts {
             let mut slice = res.index_mut((2 * i..2 * i + 2, 0));
-            slice += self.ground.gradient(x.index((2 * i..2 * i + 2, 0)));
+            // slice += self.ground.gradient(x.index((2 * i..2 * i + 2, 0)));
         }
         for i in 0..self.plane.n_verts {
             let mut slice = res.index_mut((2 * i..2 * i + 2, 0));
             slice += self.circle.gradient(x.index((2 * i..2 * i + 2, 0)));
         }
+        for i in 0..self.plane.n_verts {
+            let mut slice = res.index_mut((2 * i..2 * i + 2, 0));
+            slice += self.circle2.gradient(x.index((2 * i..2 * i + 2, 0)));
+        }
+
         Some(res)
     }
 
@@ -212,11 +221,15 @@ impl Problem for BouncingScenario {
 
         for i in 0..self.plane.n_verts {
             let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
-            slice += self.ground.hessian(x.index((2 * i..2 * i + 2, 0)));
+            // slice += self.ground.hessian(x.index((2 * i..2 * i + 2, 0)));
         }
         for i in 0..self.plane.n_verts {
             let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
             slice += self.circle.hessian(x.index((2 * i..2 * i + 2, 0)));
+        }
+        for i in 0..self.plane.n_verts {
+            let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
+            slice += self.circle2.hessian(x.index((2 * i..2 * i + 2, 0)));
         }
         Some(res)
     }
@@ -246,8 +259,8 @@ impl BouncingScenario {
     pub fn new() -> Self {
         let r = 10;
         let c = 10;
-        // let mut p = circle(5.0, 64, None);
-        let mut p = plane(r, c, None);
+        let mut p = circle(1.0, 64, None);
+        // let mut p = plane(r, c, None);
         let vec = &mut p.verts;
 
         let mut g_vec = DVector::zeros(2 * p.n_verts);
@@ -265,7 +278,7 @@ impl BouncingScenario {
             inertia: Inertia {
                 x_tao: DVector::<f64>::zeros(1),
                 g_vec,
-                dt: 0.05,
+                dt: 0.01,
                 mass: DMatrix::from_diagonal(&p.masss),
             },
 
@@ -278,12 +291,17 @@ impl BouncingScenario {
             plane: p,
             ground: Ground {
                 keta: KETA,
-                height: 0.0,
+                height: -1.0,
             },
             circle: StaticCircle {
                 keta: KETA,
                 radius: 1.0,
-                center: dvector![0.0, 0.0],
+                center: dvector![-1.5, 0.0],
+            },
+            circle2: StaticCircle {
+                keta: KETA,
+                radius: 1.0,
+                center: dvector![1.5, 0.0],
             },
         }
     }

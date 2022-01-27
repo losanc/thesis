@@ -172,9 +172,9 @@ pub fn circle(r: f64, s: usize, d: Option<f64>) -> Mesh<2, 3> {
         vert_connected_prim_indices[i + 2].push(i);
     }
     prim_connected_vert_indices.push([0, s, 1]);
-    vert_connected_prim_indices[0].push(s);
-    vert_connected_prim_indices[1].push(s);
-    vert_connected_prim_indices[s].push(s);
+    vert_connected_prim_indices[0].push(s-1);
+    vert_connected_prim_indices[1].push(s-1);
+    vert_connected_prim_indices[s].push(s-1);
 
     let (mass, volumes, ma_invs) =
         volume_mass_construct(density, &verts, &prim_connected_vert_indices);

@@ -20,9 +20,9 @@ impl<P: Problem> LineSearch<P> for SimpleLineSearch {
 
         while pro.apply(current) < pro.apply(&(current - scalar * &dir)) {
             scalar *= self.alpha;
-            if scalar < 0.1 {
-                break;
-            }
+            // if scalar < 0.1 {
+            //     break;
+            // }
         }
         println!("scalar {}", scalar);
         scalar * dir

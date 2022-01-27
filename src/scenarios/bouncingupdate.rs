@@ -1,7 +1,8 @@
 use crate::scenarios::ScenarioProblem;
+use crate::static_object::*;
 use autodiff::*;
 use mesh::*;
-use na::DVector;
+use na::{dvector, DVector};
 use nalgebra as na;
 use nalgebra::SVector;
 use nalgebra::{DMatrix, SMatrix};
@@ -15,7 +16,7 @@ const E: f64 = 1e6;
 const NU: f64 = 0.33;
 const MIU: f64 = E / (2.0 * (1.0 + NU));
 const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-const KETA: f64 = 1e8;
+const KETA: f64 = 1e6;
 
 macro_rules! energy_function {
     ($vec:ident, $ene:ident,$mat:ident,$inv_mat:ident, $square:expr, $type:ty) => {
@@ -54,10 +55,6 @@ struct Elastic {
     old_hessian_list: RefCell<Vec<SMatrix<f64, 6, 6>>>,
 }
 
-struct Bounce {
-    keta: f64,
-}
-
 impl Problem for Inertia {
     type HessianType = DMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
@@ -73,46 +70,6 @@ impl Problem for Inertia {
 
     fn hessian(&self, _x: &DVector<f64>) -> Option<Self::HessianType> {
         Some(&self.mass / (self.dt * self.dt))
-    }
-}
-
-impl Problem for Bounce {
-    type HessianType = DMatrix<f64>;
-    fn apply(&self, x: &DVector<f64>) -> f64 {
-        let mut res = 0.0;
-        x.iter().skip(1).step_by(2).for_each(|x_i| {
-            if *x_i < 0.0 {
-                res -= self.keta * x_i * x_i * x_i;
-            }
-        });
-        res
-    }
-
-    fn gradient(&self, x: &DVector<f64>) -> Option<DVector<f64>> {
-        let mut res = DVector::zeros(x.len());
-        x.iter()
-            .zip(res.iter_mut())
-            .skip(1)
-            .step_by(2)
-            .for_each(|(x_i, r_i)| {
-                if *x_i < 0.0 {
-                    *r_i -= 3.0 * self.keta * x_i * x_i;
-                }
-            });
-        Some(res)
-    }
-    fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
-        let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
-        x.iter()
-            .enumerate()
-            .skip(1)
-            .step_by(2)
-            .for_each(|(i_i, x_i)| {
-                if *x_i < 0.0 {
-                    res[(i_i, i_i)] = -6.0 * self.keta * x_i
-                }
-            });
-        Some(res)
     }
 }
 
@@ -196,7 +153,7 @@ impl Problem for Elastic {
 
         let mut vert_vec = SVector::<f64, 6>::zeros();
 
-        // println!("{:?}",update_triangle_list.len());
+        println!("{:?}",update_triangle_list.len());
 
         // now if tr
         for i in 0..self.n_prims {
@@ -223,7 +180,20 @@ impl Problem for Elastic {
                 small_hessian = ene.hessian();
                 self.old_hessian_list.borrow_mut()[i] = small_hessian.clone();
             } else {
-                small_hessian = self.old_hessian_list.borrow()[i];
+                // small_hessian = self.old_hessian_list.borrow()[i];
+                vert_vec
+                    .iter_mut()
+                    .zip(indices.iter())
+                    .for_each(|(g_i, i)| *g_i = x[*i]);
+                let vert_gradient_vec = vector_to_hessians(vert_vec);
+                let inv_mat = self.ma_invs[i];
+                let inv_mat = constant_matrix_to_hessians(inv_mat);
+                let square = self.volumes[i];
+                energy_function!(vert_gradient_vec, ene, mat, inv_mat, square, Hessian<6>);
+                // println!("{:?}    {} ",update_triangle_list,i);
+                small_hessian = ene.hessian();
+                // print!("{}\n",small_hessian - self.old_hessian_list.borrow()[i]);
+                self.old_hessian_list.borrow_mut()[i] = small_hessian.clone();
             }
             for i in 0..6 {
                 for j in 0..6 {
@@ -239,12 +209,14 @@ impl Problem for Elastic {
 pub struct BouncingUpdateScenario {
     inertia: Inertia,
     elastic: RefCell<Elastic>,
-    bounce: Bounce,
     plane: Mesh2d,
     dt: f64,
     name: String,
     tol: f64,
     update_list: RefCell<HashSet<usize>>,
+    ground: Ground,
+    circle: StaticCircle,
+    circle2: StaticCircle,
 }
 
 impl Problem for BouncingUpdateScenario {
@@ -254,17 +226,32 @@ impl Problem for BouncingUpdateScenario {
         res += self.inertia.apply(x);
         let elastic = self.elastic.try_borrow().unwrap();
         res += elastic.apply(x);
-        res += self.bounce.apply(x);
+
+        for i in 0..self.plane.n_verts {
+            res += self.circle.energy(x.index((2 * i..2 * i + 2, 0)));
+        }
+        for i in 0..self.plane.n_verts {
+            res += self.circle2.energy(x.index((2 * i..2 * i + 2, 0)));
+        }
+
         res
     }
 
     fn gradient(&self, x: &DVector<f64>) -> Option<DVector<f64>> {
         let mut res = DVector::<f64>::zeros(x.len());
         res += self.inertia.gradient(x)?;
-        res += self.bounce.gradient(x)?;
 
         let elastic = self.elastic.try_borrow().unwrap();
         res += elastic.gradient(x)?;
+
+        for i in 0..self.plane.n_verts {
+            let mut slice = res.index_mut((2 * i..2 * i + 2, 0));
+            slice += self.circle.gradient(x.index((2 * i..2 * i + 2, 0)));
+        }
+        for i in 0..self.plane.n_verts {
+            let mut slice = res.index_mut((2 * i..2 * i + 2, 0));
+            slice += self.circle2.gradient(x.index((2 * i..2 * i + 2, 0)));
+        }
 
         let mut update_list = self.update_list.try_borrow_mut().unwrap();
         update_list.clear();
@@ -279,11 +266,19 @@ impl Problem for BouncingUpdateScenario {
     fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res = res + self.inertia.hessian(x)?;
-        res = res + self.bounce.hessian(x)?;
 
         let mut elastic = self.elastic.try_borrow_mut().unwrap();
         elastic.update_list = self.update_list.try_borrow().unwrap().clone();
         res = res + elastic.hessian(x)?;
+
+        for i in 0..self.plane.n_verts {
+            let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
+            slice += self.circle.hessian(x.index((2 * i..2 * i + 2, 0)));
+        }
+        for i in 0..self.plane.n_verts {
+            let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
+            slice += self.circle2.hessian(x.index((2 * i..2 * i + 2, 0)));
+        }
 
         Some(res)
     }
@@ -314,14 +309,14 @@ impl BouncingUpdateScenario {
         println!("new");
         let r = 10;
         let c = 10;
-        // let mut p = circle(5.0, 64, None);
-        let mut p = plane(r, c, None);
+        let mut p = circle(1.0, 64, None);
+        // let mut p = plane(r, c, None);
         let vec = &mut p.verts;
 
         let mut g_vec = DVector::zeros(2 * p.n_verts);
         for i in 0..p.n_verts {
             g_vec[2 * i + 1] = -9.8;
-            vec[2 * i + 1] += 1.0;
+            vec[2 * i + 1] += 3.0;
         }
         #[cfg(feature = "save")]
         p.save_to_obj(format!("output/bouncingupdate0.obj"));
@@ -329,7 +324,7 @@ impl BouncingUpdateScenario {
         Self {
             dt: 0.01,
 
-            name: String::from("bouncingupdate1"),
+            name: String::from("bouncingupdate"),
             inertia: Inertia {
                 x_tao: DVector::<f64>::zeros(1),
                 g_vec,
@@ -347,9 +342,22 @@ impl BouncingUpdateScenario {
                 old_hessian_list: RefCell::<_>::new(vec![SMatrix::<f64, 6, 6>::zeros(); p.n_prims]),
             }),
             plane: p,
-            bounce: Bounce { keta: KETA },
             update_list: RefCell::<_>::new(HashSet::<usize>::new()),
-            tol: 1e-2,
+            tol: 10.0,
+            ground: Ground {
+                keta: KETA,
+                height: -1.0,
+            },
+            circle: StaticCircle {
+                keta: KETA,
+                radius: 1.0,
+                center: dvector![-1.5, 0.0],
+            },
+            circle2: StaticCircle {
+                keta: KETA,
+                radius: 1.0,
+                center: dvector![1.5, 0.0],
+            },
         }
     }
 }
