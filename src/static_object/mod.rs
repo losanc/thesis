@@ -8,12 +8,12 @@ pub trait static_object<'a> {
     fn hessian(&self, co: impl Into<DVectorSlice<'a, f64>>) -> DMatrix<f64>;
 }
 
-pub struct ground {
+pub struct Ground {
     pub keta: f64,
     pub height: f64,
 }
 
-impl<'a> static_object<'a> for ground {
+impl<'a> static_object<'a> for Ground {
     fn detect(&self, co: impl Into<DVectorSlice<'a, f64>>) -> bool {
         let co = co.into();
         co[1] <= self.height
@@ -49,13 +49,13 @@ impl<'a> static_object<'a> for ground {
     }
 }
 
-pub struct static_circle {
+pub struct StaticCircle {
     pub center: DVector<f64>,
     pub radius: f64,
     pub keta: f64,
 }
 
-impl<'a> static_object<'a> for static_circle {
+impl<'a> static_object<'a> for StaticCircle {
     fn detect(&self, co: impl Into<DVectorSlice<'a, f64>>) -> bool {
         let co = co.into();
         (co - &self.center).norm() < self.radius
@@ -64,10 +64,10 @@ impl<'a> static_object<'a> for static_circle {
         let co = co.into();
         let norm = (co - &self.center).norm();
         let d = norm * norm - self.radius * self.radius;
-        if d < 0.0 {
-            return -self.keta * d * d * d;
-        } else {
+        if d > 0.0 {
             return 0.0;
+        } else {
+            return -self.keta * d * d * d;
         }
     }
     fn gradient(&self, co: impl Into<DVectorSlice<'a, f64>>) -> DVector<f64> {
@@ -92,7 +92,7 @@ impl<'a> static_object<'a> for static_circle {
         let gra_ce = constant_matrix_to_gradients(gra_ce);
         let norm = (gra_co - gra_ce).transpose() * (gra_co - gra_ce);
         let norm = norm.trace();
-        let d = norm * norm - self.radius * self.radius;
+        let d = norm - self.radius * self.radius;
         if d.value() >= 0.0 {
             return res;
         } else {
@@ -123,7 +123,7 @@ impl<'a> static_object<'a> for static_circle {
         let gra_ce = constant_matrix_to_hessians(gra_ce);
         let norm = (gra_co - gra_ce).transpose() * (gra_co - gra_ce);
         let norm = norm.trace();
-        let d = norm * norm - self.radius * self.radius;
+        let d = norm - self.radius * self.radius;
         if d.value() >= 0.0 {
             return res;
         } else {

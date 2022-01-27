@@ -1,8 +1,10 @@
 use crate::scenarios::ScenarioProblem;
+use crate::static_object::*;
 use autodiff::*;
 use mesh::*;
 use na::DVector;
 use nalgebra as na;
+use nalgebra::dvector;
 use nalgebra::SVector;
 use nalgebra::{DMatrix, SMatrix};
 use num::{One, Zero};
@@ -49,10 +51,6 @@ struct Elastic {
     ma_invs: Vec<SMatrix<f64, 2, 2>>,
 }
 
-struct Bounce {
-    keta: f64,
-}
-
 impl Problem for Inertia {
     type HessianType = DMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
@@ -68,46 +66,6 @@ impl Problem for Inertia {
 
     fn hessian(&self, _x: &DVector<f64>) -> Option<Self::HessianType> {
         Some(&self.mass / (self.dt * self.dt))
-    }
-}
-
-impl Problem for Bounce {
-    type HessianType = DMatrix<f64>;
-    fn apply(&self, x: &DVector<f64>) -> f64 {
-        let mut res = 0.0;
-        x.iter().skip(1).step_by(2).for_each(|x_i| {
-            if *x_i < 0.0 {
-                res -= self.keta * x_i * x_i * x_i;
-            }
-        });
-        res
-    }
-
-    fn gradient(&self, x: &DVector<f64>) -> Option<DVector<f64>> {
-        let mut res = DVector::zeros(x.len());
-        x.iter()
-            .zip(res.iter_mut())
-            .skip(1)
-            .step_by(2)
-            .for_each(|(x_i, r_i)| {
-                if *x_i < 0.0 {
-                    *r_i -= 3.0 * self.keta * x_i * x_i;
-                }
-            });
-        Some(res)
-    }
-    fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
-        let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
-        x.iter()
-            .enumerate()
-            .skip(1)
-            .step_by(2)
-            .for_each(|(i_i, x_i)| {
-                if *x_i < 0.0 {
-                    res[(i_i, i_i)] += -6.0 * self.keta * x_i;
-                }
-            });
-        Some(res)
     }
 }
 
@@ -208,7 +166,8 @@ impl Problem for Elastic {
 pub struct BouncingScenario {
     inertia: Inertia,
     elastic: Elastic,
-    bounce: Bounce,
+    ground: Ground,
+    circle: StaticCircle,
     plane: Mesh2d,
     dt: f64,
     name: String,
@@ -220,7 +179,12 @@ impl Problem for BouncingScenario {
         let mut res = 0.0;
         res += self.inertia.apply(x);
         res += self.elastic.apply(x);
-        res += self.bounce.apply(x);
+        for i in 0..self.plane.n_verts {
+            res += self.ground.energy(x.index((2 * i..2 * i + 2, 0)));
+        }
+        for i in 0..self.plane.n_verts {
+            res += self.circle.energy(x.index((2 * i..2 * i + 2, 0)));
+        }
         res
     }
 
@@ -228,7 +192,15 @@ impl Problem for BouncingScenario {
         let mut res = DVector::<f64>::zeros(x.len());
         res += self.inertia.gradient(x)?;
         res += self.elastic.gradient(x)?;
-        res += self.bounce.gradient(x)?;
+        // res += self.bounce.gradient(x)?;
+        for i in 0..self.plane.n_verts {
+            let mut slice = res.index_mut((2 * i..2 * i + 2, 0));
+            slice += self.ground.gradient(x.index((2 * i..2 * i + 2, 0)));
+        }
+        for i in 0..self.plane.n_verts {
+            let mut slice = res.index_mut((2 * i..2 * i + 2, 0));
+            slice += self.circle.gradient(x.index((2 * i..2 * i + 2, 0)));
+        }
         Some(res)
     }
 
@@ -236,7 +208,16 @@ impl Problem for BouncingScenario {
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res = res + self.inertia.hessian(x)?;
         res = res + self.elastic.hessian(x)?;
-        res = res + self.bounce.hessian(x)?;
+        // res = res + self.bounce.hessian(x)?;
+
+        for i in 0..self.plane.n_verts {
+            let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
+            slice += self.ground.hessian(x.index((2 * i..2 * i + 2, 0)));
+        }
+        for i in 0..self.plane.n_verts {
+            let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
+            slice += self.circle.hessian(x.index((2 * i..2 * i + 2, 0)));
+        }
         Some(res)
     }
 }
@@ -272,7 +253,7 @@ impl BouncingScenario {
         let mut g_vec = DVector::zeros(2 * p.n_verts);
         for i in 0..p.n_verts {
             g_vec[2 * i + 1] = -9.8;
-            vec[2 * i + 1] += 1.0;
+            vec[2 * i + 1] += 3.0;
         }
         #[cfg(feature = "save")]
         p.save_to_obj(format!("output/bouncing0.obj"));
@@ -280,11 +261,11 @@ impl BouncingScenario {
         Self {
             dt: 0.01,
 
-            name: String::from("bouncing1"),
+            name: String::from("bouncing"),
             inertia: Inertia {
                 x_tao: DVector::<f64>::zeros(1),
                 g_vec,
-                dt: 0.01,
+                dt: 0.05,
                 mass: DMatrix::from_diagonal(&p.masss),
             },
 
@@ -295,7 +276,15 @@ impl BouncingScenario {
                 ma_invs: p.ma_invs.clone(),
             },
             plane: p,
-            bounce: Bounce { keta: KETA },
+            ground: Ground {
+                keta: KETA,
+                height: 0.0,
+            },
+            circle: StaticCircle {
+                keta: KETA,
+                radius: 1.0,
+                center: dvector![0.0, 0.0],
+            },
         }
     }
 }

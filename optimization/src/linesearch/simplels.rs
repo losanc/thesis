@@ -17,8 +17,12 @@ impl<P: Problem> LineSearch<P> for SimpleLineSearch {
         } else {
             dir = direction
         }
+
         while pro.apply(current) < pro.apply(&(current - scalar * &dir)) {
             scalar *= self.alpha;
+            if scalar < 0.1 {
+                break;
+            }
         }
         println!("scalar {}", scalar);
         scalar * dir
