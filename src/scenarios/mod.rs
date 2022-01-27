@@ -1,7 +1,7 @@
 mod bouncing;
-// mod bouncingupdate;
+mod bouncingupdate;
 pub use bouncing::BouncingScenario;
-// pub use bouncingupdate::BouncingUpdateScenario as BouncingScenario;
+pub use bouncingupdate::BouncingUpdateScenario;
 use na::DVector;
 use nalgebra as na;
 use optimization::LineSearch;

@@ -179,11 +179,15 @@ impl Problem for Elastic {
     fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
 
+        // extract vertex list need to be updated
+        // vertex id =  gradient_vec_coordiante / 2
         let update_list = self
             .update_list
             .iter()
             .map(|x| x / 2)
             .collect::<HashSet<usize>>();
+
+        // find out all connected triangles
         let update_triangle_list = update_list
             .iter()
             .map(|x| self.vert_connected_prim_indices[*x].clone())
@@ -192,8 +196,9 @@ impl Problem for Elastic {
 
         let mut vert_vec = SVector::<f64, 6>::zeros();
 
-        println!("{:?}",update_triangle_list.len());
+        // println!("{:?}",update_triangle_list.len());
 
+        // now if tr
         for i in 0..self.n_prims {
             let small_hessian;
             let ind = self.prim_connected_vert_indices[i];
@@ -306,6 +311,7 @@ impl ScenarioProblem for BouncingUpdateScenario {
 
 impl BouncingUpdateScenario {
     pub fn new() -> Self {
+        println!("new");
         let r = 10;
         let c = 10;
         // let mut p = circle(5.0, 64, None);
@@ -343,7 +349,7 @@ impl BouncingUpdateScenario {
             plane: p,
             bounce: Bounce { keta: KETA },
             update_list: RefCell::<_>::new(HashSet::<usize>::new()),
-            tol: 1e-3,
+            tol: 1e-2,
         }
     }
 }

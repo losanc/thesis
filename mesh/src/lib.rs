@@ -4,7 +4,10 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 mod dim2;
+mod dim3;
 pub use dim2::*;
+pub use dim3::*;
+use std::collections::HashSet;
 
 // D = T - 1, because rust doesn't support const generic operations yet
 #[derive(Clone)]
@@ -15,7 +18,7 @@ pub struct Mesh<const D: usize, const T: usize> {
 
     // optional, only valid for 3d mesh
     // for 2d mesh, can be directly accessed by prim_connected_vert_indices
-    pub surface: Option<Vec<[usize; T]>>,
+    pub surface: Option<HashSet<[usize; D]>>,
 
     // attributes for each vertex coordiants
     // length = n_verts* self.dim()
@@ -73,9 +76,9 @@ impl Mesh3d {
             writeln!(
                 file,
                 "v  {}  {}  {} ",
-                self.verts[i * 2],
-                self.verts[i * 2 + 1],
-                0.0
+                self.verts[i * 3],
+                self.verts[i * 3 + 1],
+                self.verts[i * 3 + 2],
             )
             .unwrap();
         }
@@ -86,7 +89,7 @@ impl Mesh3d {
                 "f  {}  {}  {} ",
                 inds[0] + 1,
                 inds[1] + 1,
-                inds[2] + 1
+                inds[2] + 1,
             )
             .unwrap();
         }

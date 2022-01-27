@@ -258,9 +258,7 @@ impl ScenarioProblem for BouncingScenario {
     fn frame_init(&mut self) {
         self.inertia.x_tao = &self.plane.verts + self.dt * &self.plane.velos;
     }
-    fn frame_end(&mut self){
-        
-    }
+    fn frame_end(&mut self) {}
 }
 
 impl BouncingScenario {
