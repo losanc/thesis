@@ -6,8 +6,8 @@ use optimization::*;
 use std::time::Instant;
 
 fn main() {
-    let problem = BouncingScenario::new();
-    // let problem = BouncingUpdateScenario::new();
+    // let problem = BouncingScenario::new();
+    let problem = BouncingUpdateScenario::new();
     let solver = NewtonSolver {};
     // let linearsolver = NewtonCG::<NoPre<_>>::new();
     let linearsolver = PivLU {};

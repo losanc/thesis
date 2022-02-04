@@ -15,7 +15,7 @@ const E: f64 = 1e6;
 const NU: f64 = 0.33;
 const MIU: f64 = E / (2.0 * (1.0 + NU));
 const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-const KETA: f64 = 1e6;
+const KETA: f64 = 1e8;
 
 macro_rules! energy_function {
     ($vec:ident, $ene:ident,$mat:ident,$inv_mat:ident, $square:expr, $type:ty) => {
@@ -259,7 +259,7 @@ impl BouncingScenario {
     pub fn new() -> Self {
         let r = 10;
         let c = 10;
-        let mut p = circle(1.0, 64, None);
+        let mut p = circle(1.0, 6, None);
         // let mut p = plane(r, c, None);
         let vec = &mut p.verts;
 

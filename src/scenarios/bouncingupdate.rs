@@ -16,7 +16,7 @@ const E: f64 = 1e6;
 const NU: f64 = 0.33;
 const MIU: f64 = E / (2.0 * (1.0 + NU));
 const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-const KETA: f64 = 1e6;
+const KETA: f64 = 1e8;
 
 macro_rules! energy_function {
     ($vec:ident, $ene:ident,$mat:ident,$inv_mat:ident, $square:expr, $type:ty) => {
@@ -143,7 +143,7 @@ impl Problem for Elastic {
             .iter()
             .map(|x| x / 2)
             .collect::<HashSet<usize>>();
-
+        println!("update_list: {:?}", update_list.len());
         // find out all connected triangles
         let update_triangle_list = update_list
             .iter()
@@ -153,7 +153,7 @@ impl Problem for Elastic {
 
         let mut vert_vec = SVector::<f64, 6>::zeros();
 
-        println!("{:?}",update_triangle_list.len());
+        println!("{:?}", update_triangle_list.len());
 
         // now if tr
         for i in 0..self.n_prims {
@@ -180,20 +180,7 @@ impl Problem for Elastic {
                 small_hessian = ene.hessian();
                 self.old_hessian_list.borrow_mut()[i] = small_hessian.clone();
             } else {
-                // small_hessian = self.old_hessian_list.borrow()[i];
-                vert_vec
-                    .iter_mut()
-                    .zip(indices.iter())
-                    .for_each(|(g_i, i)| *g_i = x[*i]);
-                let vert_gradient_vec = vector_to_hessians(vert_vec);
-                let inv_mat = self.ma_invs[i];
-                let inv_mat = constant_matrix_to_hessians(inv_mat);
-                let square = self.volumes[i];
-                energy_function!(vert_gradient_vec, ene, mat, inv_mat, square, Hessian<6>);
-                // println!("{:?}    {} ",update_triangle_list,i);
-                small_hessian = ene.hessian();
-                // print!("{}\n",small_hessian - self.old_hessian_list.borrow()[i]);
-                self.old_hessian_list.borrow_mut()[i] = small_hessian.clone();
+                small_hessian = self.old_hessian_list.borrow()[i];
             }
             for i in 0..6 {
                 for j in 0..6 {
@@ -309,7 +296,7 @@ impl BouncingUpdateScenario {
         println!("new");
         let r = 10;
         let c = 10;
-        let mut p = circle(1.0, 64, None);
+        let mut p = circle(1.0, 6, None);
         // let mut p = plane(r, c, None);
         let vec = &mut p.verts;
 

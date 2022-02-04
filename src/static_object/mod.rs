@@ -70,6 +70,7 @@ impl<'a> static_object<'a> for StaticCircle {
             return -self.keta * d * d * d;
         }
     }
+
     fn gradient(&self, co: impl Into<DVectorSlice<'a, f64>>) -> DVector<f64> {
         let co = co.into();
         let mut res = DVector::<f64>::zeros(co.len());

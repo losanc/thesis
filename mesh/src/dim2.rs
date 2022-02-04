@@ -2,6 +2,7 @@ use crate::area;
 use crate::Mesh;
 use nalgebra::DVector;
 use nalgebra::{matrix, SMatrix};
+use std::collections::HashSet;
 
 fn volume_mass_construct(
     density: f64,
@@ -124,7 +125,7 @@ pub fn plane(r: usize, c: usize, d: Option<f64>) -> Mesh<2, 3> {
     }
 }
 
-pub fn circle(r: f64, s: usize, d: Option<f64>) -> Mesh<2, 3> {
+pub fn fan(r: f64, s: usize, d: Option<f64>) -> Mesh<2, 3> {
     // the shape of this circle
 
     //            s/4
@@ -172,9 +173,9 @@ pub fn circle(r: f64, s: usize, d: Option<f64>) -> Mesh<2, 3> {
         vert_connected_prim_indices[i + 2].push(i);
     }
     prim_connected_vert_indices.push([0, s, 1]);
-    vert_connected_prim_indices[0].push(s-1);
-    vert_connected_prim_indices[1].push(s-1);
-    vert_connected_prim_indices[s].push(s-1);
+    vert_connected_prim_indices[0].push(s - 1);
+    vert_connected_prim_indices[1].push(s - 1);
+    vert_connected_prim_indices[s].push(s - 1);
 
     let (mass, volumes, ma_invs) =
         volume_mass_construct(density, &verts, &prim_connected_vert_indices);
@@ -184,6 +185,172 @@ pub fn circle(r: f64, s: usize, d: Option<f64>) -> Mesh<2, 3> {
         surface: None,
 
         verts,
+        velos: DVector::<f64>::zeros(2 * n_verts),
+        accls: DVector::<f64>::zeros(2 * n_verts),
+        masss: mass,
+
+        volumes,
+        ma_invs,
+
+        prim_connected_vert_indices,
+        vert_connected_prim_indices,
+    }
+}
+
+pub fn circle(r: f64, res: usize, d: Option<f64>) -> Mesh<2, 3> {
+    // modifed from https://stackoverflow.com/questions/53406534/procedural-circle-mesh-with-uniform-faces
+    // zhi you yi ju niu bi
+    let dim = r / res as f64;
+    let n_verts = res * (res + 1) * 3 + 1;
+    let n_prims = 0;
+    let density = d.unwrap_or(1e3);
+    let mut vertices = DVector::zeros(n_verts * 2);
+
+    let mut count = 1;
+    for circ in 0..res {
+        let angleStep = (std::f64::consts::PI * 2.0) / ((circ as f64 + 1.0) * 6.0);
+        for point in 0..(circ + 1) * 6 {
+            let angle = angleStep * point as f64;
+            vertices[2 * count] = angle.cos() * dim * (circ + 1) as f64;
+            vertices[2 * count + 1] = angle.sin() * dim * (circ + 1) as f64;
+            count += 1;
+            // vtc.Add(new Vector2(
+            //     Mathf.Cos(angleStep * point),
+            //     Mathf.Sin(angleStep * point)) * d * (circ + 1));
+        }
+    }
+    print!("{}  {}", count, vertices.len());
+
+    let get_point_index = |c: usize, x: usize| -> usize {
+        if (c > 999999) {
+            return 0; // In case of center point
+        }
+        let x = x % ((c + 1) * 6); // Make the point index circular
+                                   // Explanation: index = number of points in previous circles + central point + x
+                                   // hence: (0+1+2+...+c)*6+x+1 = ((c/2)*(c+1))*6+x+1 = 3*c*(c+1)+x+1
+
+        return (3 * c * (c + 1) + x + 1);
+    };
+    let mut n_prims = 0;
+    let mut prim_connected_vert_indices = Vec::<[usize; 3]>::new();
+    let mut vert_connected_prim_indices = vec![Vec::<usize>::new(); count];
+
+    let mut surface = HashSet::<[usize; 2]>::new();
+    let sort = |x, y| -> [usize; 2] {
+        if x < y {
+            return [x, y];
+        }
+        return [y, x];
+    };
+
+    for circ in 0..res {
+        let mut other = 0;
+        for point in 0..(circ + 1) * 6 {
+            if point % (circ + 1) != 0 {
+                let v1 = get_point_index(circ - 1, other + 1);
+                let v2 = get_point_index(circ - 1, other);
+                let v3 = get_point_index(circ, point);
+
+                prim_connected_vert_indices.push([v1, v2, v3]);
+                vert_connected_prim_indices[v1].push(n_prims);
+                vert_connected_prim_indices[v2].push(n_prims);
+                vert_connected_prim_indices[v3].push(n_prims);
+                n_prims += 1;
+
+                let e1 = sort(v1, v2);
+                let e2 = sort(v3, v2);
+                let e3 = sort(v1, v3);
+                if surface.contains(&e1) {
+                    surface.remove(&e1);
+                } else {
+                    surface.insert(e1);
+                }
+
+                if surface.contains(&e2) {
+                    surface.remove(&e2);
+                } else {
+                    surface.insert(e2);
+                }
+
+                if surface.contains(&e3) {
+                    surface.remove(&e3);
+                } else {
+                    surface.insert(e3);
+                };
+
+                let v1 = get_point_index(circ, point);
+                let v2 = get_point_index(circ, point + 1);
+                let v3 = get_point_index(circ - 1, other + 1);
+
+                prim_connected_vert_indices.push([v1, v2, v3]);
+                vert_connected_prim_indices[v1].push(n_prims);
+                vert_connected_prim_indices[v2].push(n_prims);
+                vert_connected_prim_indices[v3].push(n_prims);
+                let e1 = sort(v1, v2);
+                let e2 = sort(v3, v2);
+                let e3 = sort(v1, v3);
+
+                if surface.contains(&e1) {
+                    surface.remove(&e1);
+                } else {
+                    surface.insert(e1);
+                }
+
+                if surface.contains(&e2) {
+                    surface.remove(&e2);
+                } else {
+                    surface.insert(e2);
+                }
+
+                if surface.contains(&e3) {
+                    surface.remove(&e3);
+                } else {
+                    surface.insert(e3);
+                }
+
+                other += 1;
+                n_prims += 1;
+            } else {
+                let v1 = get_point_index(circ, point);
+                let v2 = get_point_index(circ, point + 1);
+                let v3 = get_point_index(circ - 1, other);
+                prim_connected_vert_indices.push([v1, v2, v3]);
+                vert_connected_prim_indices[v1].push(n_prims);
+                vert_connected_prim_indices[v2].push(n_prims);
+                vert_connected_prim_indices[v3].push(n_prims);
+                let e1 = sort(v1, v2);
+                let e2 = sort(v3, v2);
+                let e3 = sort(v1, v3);
+                if surface.contains(&e1) {
+                    surface.remove(&e1);
+                } else {
+                    surface.insert(e1);
+                }
+
+                if surface.contains(&e2) {
+                    surface.remove(&e2);
+                } else {
+                    surface.insert(e2);
+                }
+
+                if surface.contains(&e3) {
+                    surface.remove(&e3);
+                } else {
+                    surface.insert(e3);
+                }
+                n_prims += 1;
+            }
+        }
+    }
+    let (mass, volumes, ma_invs) =
+        volume_mass_construct(density, &vertices, &prim_connected_vert_indices);
+
+    Mesh {
+        n_verts,
+        n_prims,
+        surface: Some(surface),
+
+        verts: vertices,
         velos: DVector::<f64>::zeros(2 * n_verts),
         accls: DVector::<f64>::zeros(2 * n_verts),
         masss: mass,
