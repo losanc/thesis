@@ -222,9 +222,10 @@ pub fn circle(r: f64, res: usize, d: Option<f64>) -> Mesh<2, 3> {
     print!("{}  {}", count, vertices.len());
 
     let get_point_index = |c: usize, x: usize| -> usize {
-        if (c > 999999) {
-            return 0; // In case of center point
+        if c == 0 {
+            return 0;// In case of center point
         }
+        let c = c - 1;
         let x = x % ((c + 1) * 6); // Make the point index circular
                                    // Explanation: index = number of points in previous circles + central point + x
                                    // hence: (0+1+2+...+c)*6+x+1 = ((c/2)*(c+1))*6+x+1 = 3*c*(c+1)+x+1
@@ -247,9 +248,9 @@ pub fn circle(r: f64, res: usize, d: Option<f64>) -> Mesh<2, 3> {
         let mut other = 0;
         for point in 0..(circ + 1) * 6 {
             if point % (circ + 1) != 0 {
-                let v1 = get_point_index(circ - 1, other + 1);
-                let v2 = get_point_index(circ - 1, other);
-                let v3 = get_point_index(circ, point);
+                let v1 = get_point_index(circ, other + 1);
+                let v2 = get_point_index(circ, other);
+                let v3 = get_point_index(circ + 1, point);
 
                 prim_connected_vert_indices.push([v1, v2, v3]);
                 vert_connected_prim_indices[v1].push(n_prims);
@@ -278,9 +279,9 @@ pub fn circle(r: f64, res: usize, d: Option<f64>) -> Mesh<2, 3> {
                     surface.insert(e3);
                 };
 
-                let v1 = get_point_index(circ, point);
-                let v2 = get_point_index(circ, point + 1);
-                let v3 = get_point_index(circ - 1, other + 1);
+                let v1 = get_point_index(circ + 1, point);
+                let v2 = get_point_index(circ + 1, point + 1);
+                let v3 = get_point_index(circ, other + 1);
 
                 prim_connected_vert_indices.push([v1, v2, v3]);
                 vert_connected_prim_indices[v1].push(n_prims);
@@ -311,9 +312,9 @@ pub fn circle(r: f64, res: usize, d: Option<f64>) -> Mesh<2, 3> {
                 other += 1;
                 n_prims += 1;
             } else {
-                let v1 = get_point_index(circ, point);
-                let v2 = get_point_index(circ, point + 1);
-                let v3 = get_point_index(circ - 1, other);
+                let v1 = get_point_index(circ + 1, point);
+                let v2 = get_point_index(circ + 1, point + 1);
+                let v3 = get_point_index(circ, other);
                 prim_connected_vert_indices.push([v1, v2, v3]);
                 vert_connected_prim_indices[v1].push(n_prims);
                 vert_connected_prim_indices[v2].push(n_prims);

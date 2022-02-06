@@ -26,7 +26,7 @@ impl<const N: usize> Hessian<N> {
         self.gradient = SVector::<f64, N>::zeros();
         self.hessian = SMatrix::<f64, N, N>::zeros();
     }
-    pub fn to_constant(&self) -> Self {
+    pub fn to_constant(self) -> Self {
         Self {
             value: self.value,
             gradient: SVector::<f64, N>::zeros(),

@@ -20,6 +20,12 @@ impl<const N: usize> Gradient<N> {
     pub fn as_constant(&mut self) {
         self.gradient = SVector::<f64, N>::zeros();
     }
+    pub fn to_constant(self) -> Self {
+        Self {
+            value: self.value,
+            gradient: SVector::<f64, N>::zeros(),
+        }
+    }
 }
 
 impl<const N: usize> fmt::Display for Gradient<N> {

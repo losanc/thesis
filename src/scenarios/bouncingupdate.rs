@@ -294,9 +294,7 @@ impl ScenarioProblem for BouncingUpdateScenario {
 impl BouncingUpdateScenario {
     pub fn new() -> Self {
         println!("new");
-        let r = 10;
-        let c = 10;
-        let mut p = circle(1.0, 6, None);
+        let mut p = circle(1.0, 5, None);
         // let mut p = plane(r, c, None);
         let vec = &mut p.verts;
 
