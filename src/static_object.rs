@@ -1,6 +1,6 @@
 use autodiff::*;
 use nalgebra::{DMatrix, DVector, DVectorSlice, SVector};
-pub trait static_object<'a> {
+pub trait StaticObject<'a> {
     /// returns true when collision happens
     fn detect(&self, co: impl Into<DVectorSlice<'a, f64>>) -> bool;
     fn energy(&self, co: impl Into<DVectorSlice<'a, f64>>) -> f64;
@@ -13,7 +13,7 @@ pub struct Ground {
     pub height: f64,
 }
 
-impl<'a> static_object<'a> for Ground {
+impl<'a> StaticObject<'a> for Ground {
     fn detect(&self, co: impl Into<DVectorSlice<'a, f64>>) -> bool {
         let co = co.into();
         co[1] <= self.height
@@ -55,7 +55,7 @@ pub struct StaticCircle {
     pub keta: f64,
 }
 
-impl<'a> static_object<'a> for StaticCircle {
+impl<'a> StaticObject<'a> for StaticCircle {
     fn detect(&self, co: impl Into<DVectorSlice<'a, f64>>) -> bool {
         let co = co.into();
         (co - &self.center).norm() < self.radius

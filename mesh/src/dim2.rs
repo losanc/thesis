@@ -202,35 +202,31 @@ pub fn circle(r: f64, res: usize, d: Option<f64>) -> Mesh<2, 3> {
     // zhi you yi ju niu bi
     let dim = r / res as f64;
     let n_verts = res * (res + 1) * 3 + 1;
-    let n_prims = 0;
     let density = d.unwrap_or(1e3);
     let mut vertices = DVector::zeros(n_verts * 2);
 
     let mut count = 1;
     for circ in 0..res {
-        let angleStep = (std::f64::consts::PI * 2.0) / ((circ as f64 + 1.0) * 6.0);
+        let angle_step = (std::f64::consts::PI * 2.0) / ((circ as f64 + 1.0) * 6.0);
         for point in 0..(circ + 1) * 6 {
-            let angle = angleStep * point as f64;
+            let angle = angle_step * point as f64;
             vertices[2 * count] = angle.cos() * dim * (circ + 1) as f64;
             vertices[2 * count + 1] = angle.sin() * dim * (circ + 1) as f64;
             count += 1;
-            // vtc.Add(new Vector2(
-            //     Mathf.Cos(angleStep * point),
-            //     Mathf.Sin(angleStep * point)) * d * (circ + 1));
         }
     }
     print!("{}  {}", count, vertices.len());
 
     let get_point_index = |c: usize, x: usize| -> usize {
         if c == 0 {
-            return 0;// In case of center point
+            return 0; // In case of center point
         }
         let c = c - 1;
         let x = x % ((c + 1) * 6); // Make the point index circular
                                    // Explanation: index = number of points in previous circles + central point + x
                                    // hence: (0+1+2+...+c)*6+x+1 = ((c/2)*(c+1))*6+x+1 = 3*c*(c+1)+x+1
 
-        return (3 * c * (c + 1) + x + 1);
+        3 * c * (c + 1) + x + 1
     };
     let mut n_prims = 0;
     let mut prim_connected_vert_indices = Vec::<[usize; 3]>::new();

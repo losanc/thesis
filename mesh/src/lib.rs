@@ -4,9 +4,9 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 mod dim2;
-mod dim3;
+// mod dim3;
 pub use dim2::*;
-pub use dim3::*;
+// pub use dim3::*;
 use std::collections::HashSet;
 
 // D = T - 1, because rust doesn't support const generic operations yet
