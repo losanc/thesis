@@ -2,6 +2,7 @@ use na::{SMatrix, SVector};
 use nalgebra as na;
 use num::{One, Zero};
 use std::fmt;
+use std::ops::Div;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
 #[derive(Clone, PartialEq, Debug, Copy)]
 pub struct Gradient<const N: usize> {
@@ -115,6 +116,31 @@ impl<const N: usize> Mul<Self> for Gradient<N> {
         Gradient {
             value: self.value * rhs.value,
             gradient: self.gradient * rhs.value + self.value * rhs.gradient,
+        }
+    }
+}
+
+impl<const N: usize> Div<Self> for Gradient<N> {
+    type Output = Self;
+
+    #[inline]
+    fn div(self, rhs: Self) -> Self {
+        Gradient {
+            value: self.value / rhs.value,
+            gradient: (self.gradient * rhs.value - self.value * rhs.gradient)
+                / (rhs.value * rhs.value),
+        }
+    }
+}
+
+impl<const N: usize> Div<f64> for Gradient<N> {
+    type Output = Self;
+
+    #[inline]
+    fn div(self, rhs: f64) -> Self {
+        Gradient {
+            value: self.value / rhs,
+            gradient: self.gradient / rhs,
         }
     }
 }

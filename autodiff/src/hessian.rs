@@ -2,6 +2,7 @@ use na::{SMatrix, SVector};
 use nalgebra as na;
 use num::{One, Zero};
 use std::fmt;
+use std::ops::Div;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
 #[derive(Clone, PartialEq, Debug, Copy)]
 pub struct Hessian<const N: usize> {
@@ -24,6 +25,13 @@ impl<const N: usize> Hessian<N> {
     pub fn as_constant(&mut self) {
         self.gradient = SVector::<f64, N>::zeros();
         self.hessian = SMatrix::<f64, N, N>::zeros();
+    }
+    pub fn to_constant(&self) -> Self {
+        Self {
+            value: self.value,
+            gradient: SVector::<f64, N>::zeros(),
+            hessian: SMatrix::<f64, N, N>::zeros(),
+        }
     }
 }
 
@@ -130,6 +138,35 @@ impl<const N: usize> Mul<Self> for Hessian<N> {
             hessian: self.hessian * rhs.value
                 + self.value * rhs.hessian
                 + self.gradient * rhs.gradient.transpose(),
+        }
+    }
+}
+
+impl<const N: usize> Div<Self> for Hessian<N> {
+    type Output = Self;
+    #[inline]
+    fn div(self, rhs: Self) -> Self {
+        let value = self.value / rhs.value;
+        let gradient =
+            (self.gradient * rhs.value - self.value * rhs.gradient) / (rhs.value * rhs.value);
+        let hessian = self.hessian - gradient * rhs.gradient.transpose() - value * rhs.hessian;
+        let hessian = hessian / rhs.value;
+        Hessian {
+            value,
+            gradient,
+            hessian,
+        }
+    }
+}
+
+impl<const N: usize> Div<f64> for Hessian<N> {
+    type Output = Self;
+    #[inline]
+    fn div(self, rhs: f64) -> Self {
+        Hessian {
+            value: self.value / rhs,
+            gradient: self.gradient / rhs,
+            hessian: self.hessian / rhs,
         }
     }
 }
