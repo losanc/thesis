@@ -20,13 +20,24 @@ const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
 const KETA: f64 = 1e8;
 
 macro_rules! energy_function {
-    ($vec:ident, $ene:ident,$mat:ident,$inv_mat:ident, $square:expr, $type:ty) => {
+    ($vec:ident, $ene:ident,$mat:ident,$inv_mat:ident, $square:expr, $type:ty,$mat2:ident, $deter:ident) => {
         let $mat = na::matrix![
                 $vec[4]-$vec[0], $vec[2]-$vec[0];
                 $vec[5]-$vec[1], $vec[3]-$vec[1];
             ];
         let $mat = $mat*$inv_mat;
-        let $mat = $mat.transpose() * $mat;
+        let $deter = $mat[(0,0)]*$mat[(1,1)]-$mat[(0,1)]*$mat[(1,0)];
+        let mut $mat2 = $mat.transpose();
+        // handling for inverted triangles
+        // if f64::from($deter)<0.0{
+        //     $mat2 =  na::matrix![
+        //         $mat2[(1,0)], $mat2[(1,1)];
+        //         $mat2[(0,0)], $mat2[(0,1)];
+        //     ];
+        // }
+
+        let $mat = $mat2 * $mat;
+
         let $mat  = ($mat  -
             na::matrix![
                 <$type>::one(), <$type>::zero();
@@ -94,7 +105,7 @@ impl Problem for Elastic {
 
             let inv_mat = self.ma_invs[i];
             let square = self.volumes[i];
-            energy_function!(vert_vec, ene, mat, inv_mat, square, f64);
+            energy_function!(vert_vec, ene, mat, inv_mat, square, f64, mat2, deter);
             res += ene;
         }
         res
@@ -122,7 +133,16 @@ impl Problem for Elastic {
             let inv_mat = self.ma_invs[i];
             let inv_mat = constant_matrix_to_gradients(inv_mat);
             let square = self.volumes[i];
-            energy_function!(vert_gradient_vec, ene, mat, inv_mat, square, Gradient<6>);
+            energy_function!(
+                vert_gradient_vec,
+                ene,
+                mat,
+                inv_mat,
+                square,
+                Gradient<6>,
+                mat2,
+                deter
+            );
             let grad = ene.gradient();
             indices
                 .iter()
@@ -154,7 +174,16 @@ impl Problem for Elastic {
             let inv_mat = self.ma_invs[i];
             let inv_mat = constant_matrix_to_hessians(inv_mat);
             let square = self.volumes[i];
-            energy_function!(vert_gradient_vec, ene, mat, inv_mat, square, Hessian<6>);
+            energy_function!(
+                vert_gradient_vec,
+                ene,
+                mat,
+                inv_mat,
+                square,
+                Hessian<6>,
+                mat2,
+                deter
+            );
             let small_hessian = ene.hessian();
             for i in 0..6 {
                 for j in 0..6 {
@@ -248,7 +277,8 @@ impl ScenarioProblem for BouncingScenario {
 
 impl BouncingScenario {
     pub fn new() -> Self {
-        let mut p = circle(1.0, 5, None);
+        let mut p = circle(1.0, 7, None);
+        // let mut p = fan(1.0,64,None);
         let vec = &mut p.verts;
 
         let mut g_vec = DVector::zeros(2 * p.n_verts);
@@ -285,7 +315,7 @@ impl BouncingScenario {
             circle2: StaticCircle {
                 keta: KETA,
                 radius: 1.0,
-                center: dvector![2.0, -2.0],
+                center: dvector![1.5, 0.0],
             },
         }
     }
@@ -293,9 +323,9 @@ impl BouncingScenario {
 
 fn main() {
     let problem = BouncingScenario::new();
-    let solver = NewtonSolver {};
+    let solver = NewtonSolver { max_iter: 30 };
     let linearsolver = PivLU {};
-    let linesearch = SimpleLineSearch { alpha: 0.9 };
+    let linesearch = SimpleLineSearch { alpha: 0.9, tol: 1e-5 };
     let mut a = Scenario::new(problem, solver, linearsolver, linesearch);
     for _i in 0..300 {
         // let start = Instant::now();

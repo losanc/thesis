@@ -5,6 +5,7 @@ use na::DVector;
 use nalgebra as na;
 pub struct SimpleLineSearch {
     pub alpha: f64,
+    pub tol: f64,
 }
 
 impl<P: Problem> LineSearch<P> for SimpleLineSearch {
@@ -20,9 +21,9 @@ impl<P: Problem> LineSearch<P> for SimpleLineSearch {
 
         while pro.apply(current) < pro.apply(&(current - scalar * &dir)) {
             scalar *= self.alpha;
-            // if scalar < 0.1 {
-            //     break;
-            // }
+            if scalar < self.tol {
+                break;
+            }
         }
         println!("scalar {}", scalar);
         scalar * dir

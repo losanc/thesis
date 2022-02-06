@@ -6,7 +6,9 @@ use crate::Solver;
 use na::DVector;
 use nalgebra as na;
 
-pub struct NewtonSolver {}
+pub struct NewtonSolver {
+    pub max_iter: usize,
+}
 
 impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>> Solver<P, L, LS>
     for NewtonSolver
@@ -16,14 +18,16 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
         let mut h: P::HessianType;
         let mut count = 0;
         let mut res = input.clone();
-        while g.norm() > 0.2 {
+        while g.norm() > 0.1 {
             h = p.hessian(&res).unwrap();
-            println!("gradient norm{}", g.norm());
             let delta = lin.solve(&h, &g);
-            // print!("linear residual")
             let delta = ls.search(p, &res, delta);
             res -= delta;
             g = p.gradient(&res).unwrap();
+            if count > self.max_iter {
+                break;
+            }
+            println!("gradient norm{}", g.norm());
             count += 1;
         }
         println!("newton step: {}\n", count);

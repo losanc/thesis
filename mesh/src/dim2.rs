@@ -215,7 +215,6 @@ pub fn circle(r: f64, res: usize, d: Option<f64>) -> Mesh<2, 3> {
             count += 1;
         }
     }
-    print!("{}  {}", count, vertices.len());
 
     let get_point_index = |c: usize, x: usize| -> usize {
         if c == 0 {
