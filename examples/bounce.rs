@@ -277,14 +277,14 @@ impl ScenarioProblem for BouncingScenario {
 
 impl BouncingScenario {
     pub fn new() -> Self {
-        let mut p = circle(1.0, 7, None);
+        let mut p = circle(1.0, 5, None);
         // let mut p = fan(1.0,64,None);
         let vec = &mut p.verts;
 
         let mut g_vec = DVector::zeros(2 * p.n_verts);
         for i in 0..p.n_verts {
             g_vec[2 * i + 1] = -9.8;
-            vec[2 * i + 1] += 3.0;
+            vec[2 * i + 1] += 10.0;
         }
         #[cfg(feature = "save")]
         p.save_to_obj(format!("output/bouncing0.obj"));
@@ -325,7 +325,10 @@ fn main() {
     let problem = BouncingScenario::new();
     let solver = NewtonSolver { max_iter: 30 };
     let linearsolver = PivLU {};
-    let linesearch = SimpleLineSearch { alpha: 0.9, tol: 1e-5 };
+    let linesearch = SimpleLineSearch {
+        alpha: 0.9,
+        tol: 1e-5,
+    };
     let mut a = Scenario::new(problem, solver, linearsolver, linesearch);
     for _i in 0..300 {
         // let start = Instant::now();

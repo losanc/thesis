@@ -25,7 +25,6 @@ impl<P: Problem> LineSearch<P> for SimpleLineSearch {
                 break;
             }
         }
-        println!("scalar {}", scalar);
         scalar * dir
     }
 }

@@ -13,7 +13,7 @@ pub struct NewtonSolver {
 impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>> Solver<P, L, LS>
     for NewtonSolver
 {
-    fn solve(&self, p: &P, lin: &L, ls: &LS, input: &DVector<f64>) -> DVector<f64> {
+    fn solve<T: std::io::Write>(&self, p: &P, lin: &L, ls: &LS, input: &DVector<f64>,log: &mut T) -> DVector<f64>{
         let mut g = p.gradient(input).unwrap();
         let mut h: P::HessianType;
         let mut count = 0;
@@ -27,10 +27,14 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
             if count > self.max_iter {
                 break;
             }
-            println!("gradient norm{}", g.norm());
+            // log.write_all(b"gradient norm");
+            // log.write_all(g.norm().to_string().as_bytes());
+            // log.write_all(b"\n");
             count += 1;
         }
-        println!("newton step: {}\n", count);
+        // log.write_all(b"newton step: ");
+        // log.write_all(count.to_string().as_bytes());
+        // log.write_all(b"\n");
         res
     }
 }

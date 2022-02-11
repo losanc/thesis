@@ -111,5 +111,5 @@ pub trait LineSearch<P: Problem> {
 pub trait Solver<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>>:
     Sized
 {
-    fn solve(&self, pro: &P, lin: &L, ls: &LS, input: &DVector<f64>) -> DVector<f64>;
+    fn solve<T: std::io::Write>(&self, pro: &P, lin: &L, ls: &LS, input: &DVector<f64>,log: &mut T) -> DVector<f64>;
 }

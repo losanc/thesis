@@ -5,10 +5,11 @@ use nalgebra as na;
 use nalgebra::SVector;
 use nalgebra::{DMatrix, SMatrix};
 use num::{One, Zero};
-use optimization::Problem;
+use optimization::*;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::string::String;
+use thesis::scenarios::Scenario;
 use thesis::scenarios::ScenarioProblem;
 use thesis::static_object::*;
 
@@ -143,7 +144,7 @@ impl Problem for Elastic {
             .iter()
             .map(|x| x / 2)
             .collect::<HashSet<usize>>();
-        println!("update_list: {:?}", update_list.len());
+        // println!("update_list: {:?}", update_list.len());
         // find out all connected triangles
         let update_triangle_list = update_list
             .iter()
@@ -153,7 +154,7 @@ impl Problem for Elastic {
 
         let mut vert_vec = SVector::<f64, 6>::zeros();
 
-        println!("{:?}", update_triangle_list.len());
+        // println!("{:?}", update_triangle_list.len());
 
         // now if tr
         for i in 0..self.n_prims {
@@ -181,6 +182,17 @@ impl Problem for Elastic {
                 self.old_hessian_list.borrow_mut()[i] = small_hessian.clone();
             } else {
                 small_hessian = self.old_hessian_list.borrow()[i];
+                //  vert_vec
+                //     .iter_mut()
+                //     .zip(indices.iter())
+                //     .for_each(|(g_i, i)| *g_i = x[*i]);
+                // let vert_gradient_vec = vector_to_hessians(vert_vec);
+                // let inv_mat = self.ma_invs[i];
+                // let inv_mat = constant_matrix_to_hessians(inv_mat);
+                // let square = self.volumes[i];
+                // energy_function!(vert_gradient_vec, ene, mat, inv_mat, square, Hessian<6>);
+                // small_hessian = ene.hessian();
+                // self.old_hessian_list.borrow_mut()[i] = small_hessian.clone();
             }
             for i in 0..6 {
                 for j in 0..6 {
@@ -204,6 +216,7 @@ pub struct BouncingUpdateScenario {
     ground: Ground,
     circle: StaticCircle,
     circle2: StaticCircle,
+    modify: bool,
 }
 
 impl Problem for BouncingUpdateScenario {
@@ -242,8 +255,15 @@ impl Problem for BouncingUpdateScenario {
 
         let mut update_list = self.update_list.try_borrow_mut().unwrap();
         update_list.clear();
-        for (i, r) in res.iter().enumerate() {
-            if r.abs() > self.tol {
+        let max = 0.1 * res.amax();
+        if self.modify {
+            for (i, r) in res.iter().enumerate() {
+                if r.abs() > max {
+                    update_list.insert(i);
+                }
+            }
+        } else {
+            for (i, r) in res.iter().enumerate() {
                 update_list.insert(i);
             }
         }
@@ -289,6 +309,10 @@ impl ScenarioProblem for BouncingUpdateScenario {
         self.inertia.x_tao = &self.plane.verts + self.dt * &self.plane.velos;
     }
     fn frame_end(&mut self) {}
+
+    fn modify(&mut self, modify: bool) {
+        self.modify = modify;
+    }
 }
 
 impl BouncingUpdateScenario {
@@ -301,12 +325,13 @@ impl BouncingUpdateScenario {
         let mut g_vec = DVector::zeros(2 * p.n_verts);
         for i in 0..p.n_verts {
             g_vec[2 * i + 1] = -9.8;
-            vec[2 * i + 1] += 3.0;
+            vec[2 * i + 1] += 10.0;
         }
         #[cfg(feature = "save")]
         p.save_to_obj(format!("output/bouncingupdate0.obj"));
 
         Self {
+            modify:false,
             dt: 0.01,
 
             name: String::from("bouncingupdate"),
@@ -328,7 +353,7 @@ impl BouncingUpdateScenario {
             }),
             plane: p,
             update_list: RefCell::<_>::new(HashSet::<usize>::new()),
-            tol: 10.0,
+            tol: 0.1,
             ground: Ground {
                 keta: KETA,
                 height: -1.0,
@@ -347,4 +372,19 @@ impl BouncingUpdateScenario {
     }
 }
 
-pub fn main() {}
+pub fn main() {
+    let problem = BouncingUpdateScenario::new();
+    let solver = NewtonSolver { max_iter: 30 };
+    let linearsolver = PivLU {};
+    let linesearch = SimpleLineSearch {
+        alpha: 0.9,
+        tol: 1e-5,
+    };
+    let mut a = Scenario::new(problem, solver, linearsolver, linesearch);
+    for _i in 0..300 {
+        // let start = Instant::now();
+        a.step();
+        // let duration = start.elapsed();
+        // println!("duration: {:?}", duration);
+    }
+}
