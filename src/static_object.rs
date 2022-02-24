@@ -2,7 +2,7 @@ use autodiff::*;
 use nalgebra::{DMatrix, DVector, DVectorSlice, SVector};
 pub trait StaticObject<'a> {
     /// returns true when collision happens
-    fn detect(&self, co: impl Into<DVectorSlice<'a, f64>>) -> bool;
+    // fn detect(&self, co: impl Into<DVectorSlice<'a, f64>>) -> bool;
     fn energy(&self, co: impl Into<DVectorSlice<'a, f64>>) -> f64;
     fn gradient(&self, co: impl Into<DVectorSlice<'a, f64>>) -> DVector<f64>;
     fn hessian(&self, co: impl Into<DVectorSlice<'a, f64>>) -> DMatrix<f64>;
@@ -14,10 +14,10 @@ pub struct Ground {
 }
 
 impl<'a> StaticObject<'a> for Ground {
-    fn detect(&self, co: impl Into<DVectorSlice<'a, f64>>) -> bool {
-        let co = co.into();
-        co[1] <= self.height
-    }
+    // fn detect(&self, co: impl Into<DVectorSlice<'a, f64>>) -> bool {
+    //     let co = co.into();
+    //     co[1] <= self.height
+    // }
     fn energy(&self, co: impl Into<DVectorSlice<'a, f64>>) -> f64 {
         let co = co.into();
         let c = co[1];
@@ -56,10 +56,10 @@ pub struct StaticCircle {
 }
 
 impl<'a> StaticObject<'a> for StaticCircle {
-    fn detect(&self, co: impl Into<DVectorSlice<'a, f64>>) -> bool {
-        let co = co.into();
-        (co - &self.center).norm() < self.radius
-    }
+    // fn detect(&self, co: impl Into<DVectorSlice<'a, f64>>) -> bool {
+    //     let co = co.into();
+    //     (co - &self.center).norm() < self.radius
+    // }
     fn energy(&self, co: impl Into<DVectorSlice<'a, f64>>) -> f64 {
         let co = co.into();
         let norm = (co - &self.center).norm();

@@ -22,3 +22,4 @@ exclude = [ "./nalgebra" ]
 
 [features]
 save = []
+log = ["optimization/log"]
