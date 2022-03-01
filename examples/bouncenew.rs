@@ -9,7 +9,8 @@ use optimization::*;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::string::String;
-use thesis::scenarios::MyProblem;
+use thesis::my_newton::MyProblem;
+
 use thesis::scenarios::Scenario;
 use thesis::scenarios::ScenarioProblem;
 use thesis::static_object::*;
@@ -19,7 +20,7 @@ const NU: f64 = 0.33;
 const MIU: f64 = E / (2.0 * (1.0 + NU));
 const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
 const KETA: f64 = 1e8;
-const DT:f64 = 0.01;
+const DT: f64 = 0.03;
 
 macro_rules! energy_function {
     ($vec:ident, $ene:ident,$mat:ident,$inv_mat:ident, $square:expr, $type:ty) => {
@@ -223,6 +224,7 @@ impl MyProblem for Elastic {
 
         Some(res)
     }
+    
 }
 
 pub struct BouncingUpdateScenario {
@@ -401,23 +403,11 @@ pub fn main() {
     let linesearch = SimpleLineSearch {
         alpha: 0.9,
         tol: 1e-5,
-        epi:1.0,
+        epi: 1.0,
     };
     let mut b = Scenario::new(problem, solver, linearsolver, linesearch);
-    for _i in 0..82 {
-        // b.mystep();
-        b.step();
+    for _i in 0..300 {
+        b.mystep(false);
+        b.step(true);
     }
-
-    // let problem = BouncingUpdateScenario::new("bounce");
-    // let solver = NewtonSolver { max_iter: 30 };
-    // let linearsolver = PivLU {};
-    // let linesearch = SimpleLineSearch {
-    //     alpha: 0.9,
-    //     tol: 1e-5,
-    // };
-    // let mut a = Scenario::new(problem, solver, linearsolver, linesearch);
-    // for _i in 0..300 {
-    //     a.step();
-    // }
 }

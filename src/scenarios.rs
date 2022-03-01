@@ -5,19 +5,8 @@ use optimization::LinearSolver;
 use optimization::{Problem, Solver};
 use std::io::Write;
 
-pub trait MyProblem: Problem {
-    fn my_gradient(&self, x: &DVector<f64>) -> (Option<DVector<f64>>, Option<Vec<usize>>) {
-        (self.gradient(x), None)
-    }
-
-    fn my_hessian(
-        &self,
-        x: &DVector<f64>,
-        _active_set: &[usize],
-    ) -> Option<<Self as Problem>::HessianType> {
-        self.hessian(x)
-    }
-}
+use crate::my_newton::MyNewtonSolver;
+use crate::my_newton::MyProblem;
 
 pub trait ScenarioProblem: Problem {
     fn frame_init(&mut self);
@@ -68,7 +57,7 @@ where
         }
     }
 
-    pub fn mystep(&mut self) {
+    pub fn mystep(&mut self, use_as_result: bool) {
         #[cfg(feature = "log")]
         {
             self.file1.write_all(b"\n\nFrame:  ").expect("io error");
@@ -88,14 +77,16 @@ where
             &initial_guess,
             &mut self.file1,
         );
-        // self.frame += 1;
-        // self.problem.set_all_vertices_vector(_res2);
+        if use_as_result {
+            self.frame += 1;
+            self.problem.set_all_vertices_vector(_res2);
 
-        // #[cfg(feature = "save")]
-        // self.problem.save_to_file(self.frame);
+            #[cfg(feature = "save")]
+            self.problem.save_to_file(self.frame);
+        }
     }
 
-    pub fn step(&mut self) {
+    pub fn step(&mut self, use_as_result: bool) {
         #[cfg(feature = "log")]
         {
             self.file2.write_all(b"\n\nFrame:  ").expect("io error");
@@ -114,63 +105,13 @@ where
             &initial_guess,
             &mut self.file2,
         );
-        self.problem.set_all_vertices_vector(res2);
+        if use_as_result {
+            self.problem.set_all_vertices_vector(res2);
 
-        self.frame += 1;
-        self.problem.frame_end();
-        #[cfg(feature = "save")]
-        self.problem.save_to_file(self.frame);
-    }
-}
-
-pub struct MyNewtonSolver {
-    pub max_iter: usize,
-}
-
-impl<P: MyProblem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>> Solver<P, L, LS>
-    for MyNewtonSolver
-{
-    fn solve<T: std::io::Write>(
-        &self,
-        p: &P,
-        lin: &L,
-        ls: &LS,
-        input: &DVector<f64>,
-        log: &mut T,
-    ) -> DVector<f64> {
-        let (g, active_set) = p.my_gradient(input);
-        let mut g = g.unwrap();
-        let mut active_set = active_set.unwrap();
-        let mut h: P::HessianType;
-        let mut count = 0;
-        let mut res = input.clone();
-        while g.norm() > 1e-4 {
-            h = p.my_hessian(&res, &active_set).unwrap();
-            let delta = lin.solve(&h, &g);
-            let scalar = ls.search(p, &res, &delta);
-            res -= scalar * delta;
-            let (t1, t2) = p.my_gradient(&res);
-            g = t1.unwrap();
-            active_set = t2.unwrap();
-            if count > self.max_iter {
-                break;
-            }
-            #[cfg(feature = "log")]
-            {
-                log.write_all(b"gradient norm").expect("io error");
-                log.write_all(g.norm().to_string().as_bytes())
-                    .expect("io error");
-                log.write_all(b"\n").expect("io error");
-            }
-            count += 1;
+            self.frame += 1;
+            self.problem.frame_end();
+            #[cfg(feature = "save")]
+            self.problem.save_to_file(self.frame);
         }
-        #[cfg(feature = "log")]
-        {
-            log.write_all(b"newton step: ").expect("io error");
-            log.write_all(count.to_string().as_bytes())
-                .expect("io error");
-            log.write_all(b"\n").expect("io error");
-        }
-        res
     }
 }

@@ -1,18 +1,26 @@
-use crate::LineSearch;
-use crate::LinearSolver;
-use crate::MatrixType;
-use crate::Problem;
-use crate::Solver;
+use nalgebra::DVector;
+use optimization::{LineSearch, LinearSolver, Problem, Solver, MatrixType};
 
-use na::DVector;
-use nalgebra as na;
+pub trait MyProblem: Problem {
+    fn my_gradient(&self, x: &DVector<f64>) -> (Option<DVector<f64>>, Option<Vec<usize>>) {
+        (self.gradient(x), None)
+    }
 
-pub struct NewtonSolver {
+    fn my_hessian(
+        &self,
+        x: &DVector<f64>,
+        _active_set: &[usize],
+    ) -> Option<<Self as Problem>::HessianType> {
+        self.hessian(x)
+    }
+}
+
+pub struct MyNewtonSolver {
     pub max_iter: usize,
 }
 
-impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>> Solver<P, L, LS>
-    for NewtonSolver
+impl<P: MyProblem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>> Solver<P, L, LS>
+    for MyNewtonSolver
 {
     fn solve<T: std::io::Write>(
         &self,
@@ -22,12 +30,14 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
         input: &DVector<f64>,
         log: &mut T,
     ) -> DVector<f64> {
-        let mut g = p.gradient(input).unwrap();
+        let (g, active_set) = p.my_gradient(input);
+        let mut g = g.unwrap();
+        let mut active_set = active_set.unwrap();
         let mut h: P::HessianType;
         let mut count = 0;
         let mut res = input.clone();
         while g.norm() > 1e-5 {
-            h = p.hessian(&res).unwrap();
+            h = p.my_hessian(&res, &active_set).unwrap();
             let delta = lin.solve(&h, &g);
             #[cfg(feature = "log")]
             {
@@ -38,9 +48,11 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
             {
                 writeln!(log, "line search: {},", scalar).unwrap();
             }
-            let delta = delta * scalar;
-            res -= &delta;
-            g = p.gradient(&res).unwrap();
+            let delta = delta*scalar;
+            res -=  &delta;
+            let (t1, t2) = p.my_gradient(&res);
+            g = t1.unwrap();
+            active_set = t2.unwrap();
             if count > self.max_iter {
                 break;
             }
@@ -57,9 +69,10 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
         }
         #[cfg(feature = "log")]
         {
-            log.write_all(b"newton step: ").unwrap();
-            log.write_all(count.to_string().as_bytes()).unwrap();
-            log.write_all(b"\n").unwrap();
+            log.write_all(b"newton step: ").expect("io error");
+            log.write_all(count.to_string().as_bytes())
+                .expect("io error");
+            log.write_all(b"\n").expect("io error");
         }
         res
     }
