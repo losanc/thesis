@@ -26,12 +26,13 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
         let mut h: P::HessianType;
         let mut count = 0;
         let mut res = input.clone();
-        while g.norm() > 1e-5 {
+        while g.norm() > 0.1 {
             h = p.hessian(&res).unwrap();
             let delta = lin.solve(&h, &g);
+            println!("ls finish");
             #[cfg(feature = "log")]
             {
-                writeln!(log, "linear residual: {},", (&h.mul(&delta)-&g).norm()).unwrap();
+                writeln!(log, "linear residual: {},", (&h.mul(&delta) - &g).norm()).unwrap();
             }
             let scalar = ls.search(p, &res, &delta);
             #[cfg(feature = "log")]

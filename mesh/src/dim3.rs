@@ -4,10 +4,10 @@ use nalgebra::matrix;
 use nalgebra::DVector;
 use nalgebra::SMatrix;
 use std::collections::HashSet;
-use std::fs;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
+use std::usize;
 
 fn volume_mass_construct(
     density: f64,
@@ -57,9 +57,9 @@ fn volume_mass_construct(
 
         volumes.push(size);
         let matrix = matrix![
-            verts[*k * 3 + 0] - verts[*i * 3 + 0], verts[*j * 3 + 0] - verts[*i * 3 + 0], verts[*t * 3 + 0] - verts[*i * 3 + 0] ;
-            verts[*k * 3 + 1] - verts[*i * 3 + 1], verts[*j * 3 + 1] - verts[*i * 3 + 1], verts[*t * 3 + 1] - verts[*i * 3 + 1] ;
-            verts[*k * 3 + 2] - verts[*i * 3 + 2], verts[*j * 3 + 2] - verts[*i * 3 + 2], verts[*t * 3 + 2] - verts[*i * 3 + 2] ;
+            verts[*j * 3 + 0] - verts[*i * 3 + 0], verts[*k * 3 + 0] - verts[*i * 3 + 0], verts[*t * 3 + 0] - verts[*i * 3 + 0] ;
+            verts[*j * 3 + 1] - verts[*i * 3 + 1], verts[*k * 3 + 1] - verts[*i * 3 + 1], verts[*t * 3 + 1] - verts[*i * 3 + 1] ;
+            verts[*j * 3 + 2] - verts[*i * 3 + 2], verts[*k * 3 + 2] - verts[*i * 3 + 2], verts[*t * 3 + 2] - verts[*i * 3 + 2] ;
         ];
         ma_invs.push(matrix.try_inverse().unwrap());
     }

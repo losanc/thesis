@@ -11,6 +11,7 @@ use std::collections::HashSet;
 use std::string::String;
 use thesis::my_newton::MyProblem;
 
+use thesis::mylog;
 use thesis::scenarios::Scenario;
 use thesis::scenarios::ScenarioProblem;
 use thesis::static_object::*;
@@ -55,7 +56,7 @@ struct Elastic {
     vert_connected_prim_indices: Vec<Vec<usize>>,
     volumes: Vec<f64>,
     ma_invs: Vec<SMatrix<f64, 2, 2>>,
-    update_list: HashSet<usize>,
+    // update_list: HashSet<usize>,
     old_hessian_list: RefCell<Vec<SMatrix<f64, 6, 6>>>,
 }
 
@@ -177,7 +178,12 @@ impl Problem for Elastic {
 }
 
 impl MyProblem for Elastic {
-    fn my_hessian(&self, x: &DVector<f64>, active_set: &[usize]) -> Option<DMatrix<f64>> {
+    fn my_hessian<T: std::io::Write>(
+        &self,
+        x: &DVector<f64>,
+        active_set: &[usize],
+        log: &mut T,
+    ) -> Option<DMatrix<f64>> {
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
 
         let active_set = active_set.iter().map(|x| x / 2).collect::<HashSet<usize>>();
@@ -188,7 +194,7 @@ impl MyProblem for Elastic {
             .collect::<HashSet<usize>>();
 
         let mut vert_vec = SVector::<f64, 6>::zeros();
-
+        let mut count = 0;
         for i in 0..self.n_prims {
             let small_hessian;
             let ind = self.prim_connected_vert_indices[i];
@@ -213,6 +219,7 @@ impl MyProblem for Elastic {
                 small_hessian = ene.hessian();
                 self.old_hessian_list.borrow_mut()[i] = small_hessian.clone();
             } else {
+                count += 1;
                 small_hessian = self.old_hessian_list.borrow()[i];
             }
             for i in 0..6 {
@@ -222,9 +229,9 @@ impl MyProblem for Elastic {
             }
         }
 
+        mylog!(log, "skipped triangle", count);
         Some(res)
     }
-    
 }
 
 pub struct BouncingUpdateScenario {
@@ -233,9 +240,9 @@ pub struct BouncingUpdateScenario {
     plane: Mesh2d,
     dt: f64,
     name: String,
-    tol: f64,
-    update_list: RefCell<HashSet<usize>>,
-    ground: Ground,
+    // tol: f64,
+    // update_list: RefCell<HashSet<usize>>,
+    // ground: Ground,
     circle: StaticCircle,
     circle2: StaticCircle,
 }
@@ -303,14 +310,15 @@ impl MyProblem for BouncingUpdateScenario {
         (Some(res), Some(active_set))
     }
 
-    fn my_hessian(
+    fn my_hessian<T: std::io::Write>(
         &self,
         x: &DVector<f64>,
         active_set: &[usize],
+        log: &mut T,
     ) -> Option<<Self as Problem>::HessianType> {
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
-        res = res + self.inertia.my_hessian(x, active_set)?;
-        res = res + self.elastic.my_hessian(x, active_set)?;
+        res = res + self.inertia.my_hessian(x, active_set, log)?;
+        res = res + self.elastic.my_hessian(x, active_set, log)?;
         for i in 0..self.plane.n_verts {
             let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
             slice += self.circle.hessian(x.index((2 * i..2 * i + 2, 0)));
@@ -328,7 +336,7 @@ impl ScenarioProblem for BouncingUpdateScenario {
         self.plane.verts.clone()
     }
     fn set_all_vertices_vector(&mut self, vertices: DVector<f64>) {
-        let velocity = (&vertices - &self.plane.verts) / self.dt;
+        let velocity = 0.95 * ((&vertices - &self.plane.verts) / self.dt);
         self.plane.velos = velocity;
         self.plane.verts = vertices;
     }
@@ -350,7 +358,7 @@ impl BouncingUpdateScenario {
         let mut g_vec = DVector::zeros(2 * p.n_verts);
         for i in 0..p.n_verts {
             g_vec[2 * i + 1] = -9.8;
-            vec[2 * i + 1] += 3.0;
+            vec[2 * i + 1] += 5.0;
         }
         #[cfg(feature = "save")]
         p.save_to_obj(format!("output/bouncingupdate0.obj"));
@@ -372,16 +380,16 @@ impl BouncingUpdateScenario {
                 vert_connected_prim_indices: p.vert_connected_prim_indices.clone(),
                 volumes: p.volumes.clone(),
                 ma_invs: p.ma_invs.clone(),
-                update_list: HashSet::<usize>::new(),
+                // update_list: HashSet::<usize>::new(),
                 old_hessian_list: RefCell::<_>::new(vec![SMatrix::<f64, 6, 6>::zeros(); p.n_prims]),
             },
             plane: p,
-            update_list: RefCell::<_>::new(HashSet::<usize>::new()),
-            tol: 0.1,
-            ground: Ground {
-                keta: KETA,
-                height: -1.0,
-            },
+            // update_list: RefCell::<_>::new(HashSet::<usize>::new()),
+            // tol: 0.1,
+            // ground: Ground {
+            //     keta: KETA,
+            //     height: -1.0,
+            // },
             circle: StaticCircle {
                 keta: KETA,
                 radius: 1.0,
@@ -390,7 +398,7 @@ impl BouncingUpdateScenario {
             circle2: StaticCircle {
                 keta: KETA,
                 radius: 1.0,
-                center: dvector![1.5, 0.0],
+                center: dvector![1.5, -2.0],
             },
         }
     }

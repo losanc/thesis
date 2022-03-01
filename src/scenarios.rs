@@ -4,9 +4,11 @@ use optimization::LineSearch;
 use optimization::LinearSolver;
 use optimization::{Problem, Solver};
 use std::io::Write;
+use std::time;
 
 use crate::my_newton::MyNewtonSolver;
 use crate::my_newton::MyProblem;
+use crate::mylog;
 
 pub trait ScenarioProblem: Problem {
     fn frame_init(&mut self);
@@ -69,7 +71,7 @@ where
 
         self.problem.frame_init();
         let initial_guess = self.problem.initial_guess();
-
+        let start = time::Instant::now();
         let _res2 = self.mysolver.solve(
             &self.problem,
             &self.linearsolver,
@@ -77,6 +79,8 @@ where
             &initial_guess,
             &mut self.file1,
         );
+        let duration = start.elapsed();
+        mylog!(self.file1, "time elapsed ", duration.as_secs_f32());
         if use_as_result {
             self.frame += 1;
             self.problem.set_all_vertices_vector(_res2);
@@ -98,6 +102,7 @@ where
 
         self.problem.frame_init();
         let initial_guess = self.problem.initial_guess();
+        let start = time::Instant::now();
         let res2 = self.solver.solve(
             &self.problem,
             &self.linearsolver,
@@ -105,6 +110,8 @@ where
             &initial_guess,
             &mut self.file2,
         );
+        let duration = start.elapsed();
+        mylog!(self.file2, "time elapsed ", duration.as_secs_f32());
         if use_as_result {
             self.problem.set_all_vertices_vector(res2);
 

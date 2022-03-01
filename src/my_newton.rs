@@ -1,15 +1,17 @@
 use nalgebra::DVector;
-use optimization::{LineSearch, LinearSolver, Problem, Solver, MatrixType};
+use optimization::{LineSearch, LinearSolver, MatrixType, Problem, Solver};
 
+use crate::mylog;
 pub trait MyProblem: Problem {
     fn my_gradient(&self, x: &DVector<f64>) -> (Option<DVector<f64>>, Option<Vec<usize>>) {
         (self.gradient(x), None)
     }
 
-    fn my_hessian(
+    fn my_hessian<T: std::io::Write>(
         &self,
         x: &DVector<f64>,
         _active_set: &[usize],
+        _log: &mut T,
     ) -> Option<<Self as Problem>::HessianType> {
         self.hessian(x)
     }
@@ -36,44 +38,35 @@ impl<P: MyProblem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<
         let mut h: P::HessianType;
         let mut count = 0;
         let mut res = input.clone();
+        let mut old_value = p.apply(&input);
+        let mut new_value: f64;
         while g.norm() > 1e-5 {
-            h = p.my_hessian(&res, &active_set).unwrap();
+            h = p.my_hessian(&res, &active_set, log).unwrap();
             let delta = lin.solve(&h, &g);
-            #[cfg(feature = "log")]
-            {
-                writeln!(log, "linear residual: {},", (&h.mul(&delta)-&g).norm()).unwrap();
-            }
+            mylog!(log, "linear residual: ", (&h.mul(&delta) - &g).norm());
             let scalar = ls.search(p, &res, &delta);
-            #[cfg(feature = "log")]
-            {
-                writeln!(log, "line search: {},", scalar).unwrap();
-            }
-            let delta = delta*scalar;
-            res -=  &delta;
+            mylog!(log, "line search scalar: ", scalar);
+            let delta = delta * scalar;
+            res -= &delta;
             let (t1, t2) = p.my_gradient(&res);
             g = t1.unwrap();
             active_set = t2.unwrap();
             if count > self.max_iter {
                 break;
             }
-            #[cfg(feature = "log")]
-            {
-                writeln!(log, "delta length: {}", delta.norm()).unwrap();
-                writeln!(log, "value: {}", p.apply(&res)).unwrap();
-                log.write_all(b"gradient norm").unwrap();
-                log.write_all(g.norm().to_string().as_bytes()).unwrap();
-                log.write_all(b"\n").unwrap();
-                writeln!(log, " ").unwrap();
-            }
+
+            new_value = p.apply(&res);
+            mylog!(log, "delta length", delta.norm());
+            mylog!(log, "value", p.apply(&res));
+            mylog!(log, "value reduction", old_value - new_value);
+            mylog!(log, "gradient norm", g.norm());
+            mylog!(log, " ", " ");
+            old_value = new_value;
             count += 1;
         }
-        #[cfg(feature = "log")]
-        {
-            log.write_all(b"newton step: ").expect("io error");
-            log.write_all(count.to_string().as_bytes())
-                .expect("io error");
-            log.write_all(b"\n").expect("io error");
-        }
+
+        mylog!(log, "newton stesp", count);
+
         res
     }
 }
