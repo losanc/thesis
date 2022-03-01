@@ -29,39 +29,23 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
         while g.norm() > 0.1 {
             h = p.hessian(&res).unwrap();
             let delta = lin.solve(&h, &g);
-            println!("ls finish");
-            #[cfg(feature = "log")]
-            {
-                writeln!(log, "linear residual: {},", (&h.mul(&delta) - &g).norm()).unwrap();
-            }
+            mylog!(log, "linear residual: ", (&h.mul(&delta) - &g).norm());
             let scalar = ls.search(p, &res, &delta);
-            #[cfg(feature = "log")]
-            {
-                writeln!(log, "line search: {},", scalar).unwrap();
-            }
+            mylog!(log, "line search scalar: ", scalar);
             let delta = delta * scalar;
             res -= &delta;
             g = p.gradient(&res).unwrap();
             if count > self.max_iter {
                 break;
             }
-            #[cfg(feature = "log")]
-            {
-                writeln!(log, "delta length: {}", delta.norm()).unwrap();
-                writeln!(log, "value: {}", p.apply(&res)).unwrap();
-                log.write_all(b"gradient norm").unwrap();
-                log.write_all(g.norm().to_string().as_bytes()).unwrap();
-                log.write_all(b"\n").unwrap();
-                writeln!(log, " ").unwrap();
-            }
+            mylog!(log, "delta length", delta.norm());
+            mylog!(log, "value", p.apply(&res));
+            mylog!(log, "value reduction", old_value - new_value);
+            mylog!(log, "gradient norm", g.norm());
+            mylog!(log, " ", " ");
             count += 1;
         }
-        #[cfg(feature = "log")]
-        {
-            log.write_all(b"newton step: ").unwrap();
-            log.write_all(count.to_string().as_bytes()).unwrap();
-            log.write_all(b"\n").unwrap();
-        }
+        mylog!(log, "newton stesp", count);
         res
     }
 }

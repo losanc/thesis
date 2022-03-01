@@ -31,8 +31,14 @@ pub struct Scenario<
     mysolver: MyNewtonSolver,
     linearsolver: LSo,
     ls: LSe,
+    #[cfg(feature = "log")]
     file1: std::fs::File,
+    #[cfg(not(feature = "log"))]
+    file1: Vec<u8>,
+    #[cfg(feature = "log")]
     file2: std::fs::File,
+    #[cfg(not(feature = "log"))]
+    file2: Vec<u8>,
 }
 
 impl<P, S, LSo, LSe> Scenario<P, S, LSo, LSe>
@@ -43,10 +49,21 @@ where
     LSe: LineSearch<P>,
 {
     pub fn new(p: P, s: S, lso: LSo, lse: LSe) -> Self {
-        let mut file1 = std::fs::File::create("new.txt").unwrap();
-        file1.write_all(b"modified newton\n").expect("io error");
-        let mut file2 = std::fs::File::create("old.txt").unwrap();
-        file2.write_all(b"complete newton\n").expect("io error");
+        let mut file1;
+        let mut file2;
+        #[cfg(feature = "log")]
+        {
+            file1 = std::fs::File::create("new.txt").unwrap();
+            writeln!(file1, "modified newton").unwrap();
+            file2 = std::fs::File::create("old.txt").unwrap();
+            writeln!(file2, "complete newton").unwrap();
+        }
+        #[cfg(not(feature = "log"))]
+        {
+            file1 = Vec::<u8>::new();
+            file2 = Vec::<u8>::new();
+        }
+
         Scenario {
             problem: p,
             frame: 0,
@@ -60,14 +77,7 @@ where
     }
 
     pub fn mystep(&mut self, use_as_result: bool) {
-        #[cfg(feature = "log")]
-        {
-            self.file1.write_all(b"\n\nFrame:  ").expect("io error");
-            self.file1
-                .write_all(self.frame.to_string().as_bytes())
-                .expect("io error");
-            self.file1.write_all(b"\n").expect("io error");
-        }
+        mylog!(self.file1, "\n\nFrame {}", self.frame);
 
         self.problem.frame_init();
         let initial_guess = self.problem.initial_guess();
@@ -91,14 +101,7 @@ where
     }
 
     pub fn step(&mut self, use_as_result: bool) {
-        #[cfg(feature = "log")]
-        {
-            self.file2.write_all(b"\n\nFrame:  ").expect("io error");
-            self.file2
-                .write_all(self.frame.to_string().as_bytes())
-                .expect("io error");
-            self.file2.write_all(b"\n").expect("io error");
-        }
+        mylog!(self.file2, "\n\nFrame {}", self.frame);
 
         self.problem.frame_init();
         let initial_guess = self.problem.initial_guess();

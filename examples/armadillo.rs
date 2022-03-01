@@ -1,5 +1,4 @@
 use std::{cell::RefCell, collections::HashSet};
-
 use autodiff::{
     constant_matrix_to_gradients, constant_matrix_to_hessians, vector_to_gradients,
     vector_to_hessians, Gradient, Hessian,
@@ -11,7 +10,8 @@ use optimization::{JacobianPre, LinearSolver, NewtonCG, NewtonSolver, Problem, S
 use thesis::{
     my_newton::MyProblem,
     mylog,
-    scenarios::{Scenario, ScenarioProblem}, static_object::{Ground, StaticObject},
+    scenarios::{Scenario, ScenarioProblem},
+    static_object::{Ground, StaticObject},
 };
 
 const E: f64 = 1e6;
