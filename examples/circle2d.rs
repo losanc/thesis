@@ -360,7 +360,7 @@ impl BouncingUpdateScenario {
             g_vec[2 * i + 1] = -9.8;
             vec[2 * i + 1] += 5.0;
         }
-        
+
         Self {
             dt: DT,
 

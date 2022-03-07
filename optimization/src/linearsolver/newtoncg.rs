@@ -71,6 +71,7 @@ impl<P: PreConditioner> LinearSolver for NewtonCG<P> {
 
         let mut numerate = (r.transpose() * &z)[(0, 0)];
         for i in 0..10000 {
+            // println!("{}",i);
             let denominator = p.transpose() * (A.mul(&p));
             let denominator = denominator[(0, 0)];
             if denominator < 0.0 {
@@ -85,6 +86,7 @@ impl<P: PreConditioner> LinearSolver for NewtonCG<P> {
             r -= alpha * (A.mul(&p));
 
             if r.norm() < 0.001 {
+                println!("lin {}", i);
                 return x;
             }
             z = m_inv.mul(&r);

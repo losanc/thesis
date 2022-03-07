@@ -1,12 +1,16 @@
-use std::{cell::RefCell, collections::HashSet};
 use autodiff::{
     constant_matrix_to_gradients, constant_matrix_to_hessians, vector_to_gradients,
     vector_to_hessians, Gradient, Hessian,
 };
-use mesh::{Mesh3d,armadillo};
-use nalgebra::{DMatrix, DVector, SMatrix, SVector};
+use mesh::{armadillo, Mesh3d};
+use nalgebra::{dvector, DMatrix, DVector, SMatrix, SVector};
+use nalgebra_sparse::CsrMatrix;
 use num::{One, Zero};
-use optimization::{JacobianPre, LinearSolver, NewtonCG, NewtonSolver, Problem, SimpleLineSearch};
+use optimization::{
+    linearsolver, JacobianPre, LinearSolver, NewtonCG, NewtonSolver, NoLineSearch, NoPre, Problem,
+    SimpleLineSearch,
+};
+use std::{cell::RefCell, collections::HashSet};
 use thesis::{
     my_newton::MyProblem,
     mylog,
@@ -14,12 +18,12 @@ use thesis::{
     static_object::{Ground, StaticObject},
 };
 
-const E: f64 = 1e6;
+const E: f64 = 1e5;
 const NU: f64 = 0.33;
 const MIU: f64 = E / (2.0 * (1.0 + NU));
 const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-const KETA: f64 = 1e8;
-const DT: f64 = 0.03;
+// const KETA: f64 = 1e8;
+const DT: f64 = 0.01;
 const DIM: usize = 3;
 const CO_NUM: usize = DIM * (DIM + 1);
 
@@ -290,20 +294,21 @@ pub struct BouncingUpdateScenario {
     armadillo: Mesh3d,
     dt: f64,
     name: String,
-    ground: Ground,
+    // ground: Ground,
     // circle: StaticCircle,
     // circle2: StaticCircle,
 }
 
 impl Problem for BouncingUpdateScenario {
-    type HessianType = DMatrix<f64>;
+    // type HessianType = DMatrix<f64>;
+    type HessianType = CsrMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
         let mut res = 0.0;
         res += self.inertia.apply(x);
         res += self.elastic.apply(x);
-        for i in 0..self.armadillo.n_verts {
-            res += self.ground.energy(x.index((DIM * i..DIM * i + DIM, 0)));
-        }
+        // for i in 0..self.armadillo.n_verts {
+        //     res += self.ground.energy(x.index((DIM * i..DIM * i + DIM, 0)));
+        // }
         // for i in 0..self.plane.n_verts {
         //     res += self.circle.energy(x.index((2 * i..2 * i + 2, 0)));
         // }
@@ -318,10 +323,10 @@ impl Problem for BouncingUpdateScenario {
         let mut res = DVector::<f64>::zeros(x.len());
         res += self.inertia.gradient(x)?;
         res += self.elastic.gradient(x)?;
-        for i in 0..self.armadillo.n_verts {
-            let mut slice = res.index_mut((DIM * i..DIM * i + DIM, 0));
-            slice += self.ground.gradient(x.index((DIM * i..DIM * i + DIM, 0)));
-        }
+        // for i in 0..self.armadillo.n_verts {
+        //     let mut slice = res.index_mut((DIM * i..DIM * i + DIM, 0));
+        //     slice += self.ground.gradient(x.index((DIM * i..DIM * i + DIM, 0)));
+        // }
         // for i in 0..self.plane.n_verts {
         //     let mut slice = res.index_mut((DIM * i..DIM * i + DIM, 0));
         //     slice += self.circle.gradient(x.index((DIM * i..DIM * i + DIM, 0)));
@@ -330,6 +335,10 @@ impl Problem for BouncingUpdateScenario {
         //     let mut slice = res.index_mut((DIM * DIM..DIM * i + DIM, 0));
         //     slice += self.circle2.gradient(x.index((DIM * i..DIM * i + DIM, 0)));
         // }
+        let mut slice = res.index_mut((0..20, 0));
+        for i in slice.iter_mut() {
+            *i = 0.0;
+        }
         Some(res)
     }
 
@@ -337,10 +346,10 @@ impl Problem for BouncingUpdateScenario {
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res = res + self.inertia.hessian(x)?;
         res = res + self.elastic.hessian(x)?;
-        for i in 0..self.armadillo.n_verts {
-            let mut slice = res.index_mut((DIM * i..DIM * i + DIM, DIM * i..DIM * i + DIM));
-            slice += self.ground.hessian(x.index((DIM * i..DIM * i + DIM, 0)));
-        }
+        // for i in 0..self.armadillo.n_verts {
+        //     let mut slice = res.index_mut((DIM * i..DIM * i + DIM, DIM * i..DIM * i + DIM));
+        //     slice += self.ground.hessian(x.index((DIM * i..DIM * i + DIM, 0)));
+        // }
         // for i in 0..self.plane.n_verts {
         //     let mut slice = res.index_mut((DIM * i..DIM * i + DIM, DIM * i..DIM * i + DIM));
         //     slice += self.circle.hessian(x.index((DIM * i..DIM * i + DIM, 0)));
@@ -349,7 +358,15 @@ impl Problem for BouncingUpdateScenario {
         //     let mut slice = res.index_mut((DIM * i..DIM* i + DIM, DIM * i..DIM * i + DIM));
         //     slice += self.circle2.hessian(x.index((DIM * i..DIM * i + DIM, 0)));
         // }
-        Some(res)
+        let mut slice = res.index_mut((0..20, 20..));
+        for i in slice.iter_mut() {
+            *i = 0.0;
+        }
+        let mut slice = res.index_mut((20.., 0..20));
+        for i in slice.iter_mut() {
+            *i = 0.0;
+        }
+        Some(CsrMatrix::from(&res))
     }
 }
 
@@ -366,25 +383,33 @@ impl MyProblem for BouncingUpdateScenario {
         (Some(res), Some(active_set))
     }
 
-    // fn my_hessian<T: std::io::Write>(
-    //     &self,
-    //     x: &DVector<f64>,
-    //     active_set: &[usize],
-    //     log: &mut T,
-    // ) -> Option<<Self as Problem>::HessianType> {
-    //     let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
-    //     res = res + self.inertia.my_hessian(x, active_set, log)?;
-    //     res = res + self.elastic.my_hessian(x, active_set, log)?;
-    //     // for i in 0..self.armadillo.n_verts {
-    //     //     let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
-    //     //     slice += self.circle.hessian(x.index((2 * i..2 * i + 2, 0)));
-    //     // }
-    //     // for i in 0..self.armadillo.n_verts {
-    //     //     let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
-    //     //     slice += self.circle2.hessian(x.index((2 * i..2 * i + 2, 0)));
-    //     // }
-    //     Some(res)
-    // }
+    fn my_hessian<T: std::io::Write>(
+        &self,
+        x: &DVector<f64>,
+        active_set: &[usize],
+        log: &mut T,
+    ) -> Option<<Self as Problem>::HessianType> {
+        let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
+        res = res + self.inertia.my_hessian(x, active_set, log)?;
+        res = res + self.elastic.my_hessian(x, active_set, log)?;
+        // for i in 0..self.armadillo.n_verts {
+        //     let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
+        //     slice += self.circle.hessian(x.index((2 * i..2 * i + 2, 0)));
+        // }
+        // for i in 0..self.armadillo.n_verts {
+        //     let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
+        //     slice += self.circle2.hessian(x.index((2 * i..2 * i + 2, 0)));
+        // }
+        let mut slice = res.index_mut((0..20, 20..));
+        for i in slice.iter_mut() {
+            *i = 0.0;
+        }
+        let mut slice = res.index_mut((20.., 0..20));
+        for i in slice.iter_mut() {
+            *i = 0.0;
+        }
+        Some(CsrMatrix::from(&res))
+    }
 }
 
 impl ScenarioProblem for BouncingUpdateScenario {
@@ -408,12 +433,13 @@ impl ScenarioProblem for BouncingUpdateScenario {
 
 impl BouncingUpdateScenario {
     pub fn new(name: &str) -> Self {
-        let mut p = armadillo();
-        let vec = &mut p.verts;
+        // let mut p = armadillo();
+        let p = armadillo();
+        // let vec = &mut p.verts;
         let mut g_vec = DVector::zeros(DIM * p.n_verts);
         for i in 0..p.n_verts {
             g_vec[DIM * i + 1] = -9.8;
-            vec[DIM * i + 1] += 5.0;
+            // vec[DIM * i + 1] += 5.0;
         }
 
         Self {
@@ -426,10 +452,10 @@ impl BouncingUpdateScenario {
                 dt: DT,
                 mass: DMatrix::from_diagonal(&p.masss),
             },
-            ground: Ground {
-                keta: KETA,
-                height: -1.0,
-            },
+            // ground: Ground {
+            //     keta: KETA,
+            //     height: -1.0,
+            // },
             elastic: Elastic {
                 n_prims: p.n_prims,
                 prim_connected_vert_indices: p.prim_connected_vert_indices.clone(),
@@ -447,17 +473,19 @@ impl BouncingUpdateScenario {
 }
 
 fn main() {
-    let problem = BouncingUpdateScenario::new("armadillo");
+    let problem = BouncingUpdateScenario::new("armadillotru");
     let solver = NewtonSolver { max_iter: 30 };
-    let linearsolver = NewtonCG::<JacobianPre<DMatrix<f64>>>::new();
-    let linesearch = SimpleLineSearch {
-        alpha: 0.9,
-        tol: 1e-5,
-        epi: 1.0,
-    };
-    // let linesearch = NoLineSearch{};
+    let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
+    // let linearsolver = NewtonCG::<NoPre<DMatrix<f64>>>::new();
+    // let linesearch = SimpleLineSearch {
+    //     alpha: 0.9,
+    //     tol: 1e-5,
+    //     epi: 1.0,
+    // };
+    let linesearch = NoLineSearch {};
     let mut b = Scenario::new(problem, solver, linearsolver, linesearch);
     for _i in 0..100 {
+        println!("{}", _i);
         // b.mystep(false);
         b.step(true);
     }

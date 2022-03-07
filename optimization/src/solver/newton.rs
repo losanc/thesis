@@ -1,9 +1,9 @@
+use crate::mylog;
 use crate::LineSearch;
 use crate::LinearSolver;
 use crate::MatrixType;
 use crate::Problem;
 use crate::Solver;
-use crate::mylog;
 
 use na::DVector;
 use nalgebra as na;
@@ -31,7 +31,9 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
         let mut new_value: f64;
         while g.norm() > 0.1 {
             h = p.hessian(&res).unwrap();
+            println!("finished hessian");
             let delta = lin.solve(&h, &g);
+            println!("finished linear solver");
             mylog!(log, "linear residual: ", (&h.mul(&delta) - &g).norm());
             let scalar = ls.search(p, &res, &delta);
             mylog!(log, "line search scalar: ", scalar);
