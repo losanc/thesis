@@ -10,11 +10,15 @@ use nalgebra as na;
 
 pub struct NewtonSolver {
     pub max_iter: usize,
+    pub epi: f64,
 }
 
 impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>> Solver<P, L, LS>
     for NewtonSolver
 {
+    fn epi(&self) -> f64 {
+        self.epi
+    }
     fn solve<T: std::io::Write>(
         &self,
         p: &P,
@@ -29,7 +33,7 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
         let mut res = input.clone();
         let mut old_value = p.apply(&input);
         let mut new_value: f64;
-        while g.norm() > 0.1 {
+        while g.norm() > self.epi {
             h = p.hessian(&res).unwrap();
             println!("finished hessian");
             let delta = lin.solve(&h, &g);

@@ -301,7 +301,7 @@ impl MyProblem for BouncingUpdateScenario {
     fn my_gradient(&self, x: &DVector<f64>) -> (Option<DVector<f64>>, Option<Vec<usize>>) {
         let res = self.gradient(x).unwrap();
         let mut active_set = Vec::<usize>::new();
-        let max = 0.1 * res.amax();
+        let max = 0.6 * res.amax();
         for (i, r) in res.iter().enumerate() {
             if r.abs() > max {
                 active_set.push(i);
@@ -404,7 +404,10 @@ impl BouncingUpdateScenario {
 
 pub fn main() {
     let problem = BouncingUpdateScenario::new("mybounce");
-    let solver = NewtonSolver { max_iter: 30 };
+    let solver = NewtonSolver {
+        max_iter: 30,
+        epi: 1e-5,
+    };
     let linearsolver = PivLU {};
     let linesearch = SimpleLineSearch {
         alpha: 0.9,

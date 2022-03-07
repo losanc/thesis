@@ -3,6 +3,7 @@ use nalgebra as na;
 use optimization::LineSearch;
 use optimization::LinearSolver;
 use optimization::{Problem, Solver};
+use std::cell::RefCell;
 use std::io::Write;
 use std::time;
 
@@ -67,8 +68,12 @@ where
         Scenario {
             problem: p,
             frame: 0,
+            mysolver: MyNewtonSolver {
+                max_iter: 30,
+                epi: s.epi(),
+                frame: RefCell::<usize>::new(0),
+            },
             solver: s,
-            mysolver: MyNewtonSolver { max_iter: 30 },
             linearsolver: lso,
             ls: lse,
             file1,

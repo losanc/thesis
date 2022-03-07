@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use nalgebra::DVector;
 use optimization::{LineSearch, LinearSolver, MatrixType, Problem, Solver};
 
@@ -19,11 +21,16 @@ pub trait MyProblem: Problem {
 
 pub struct MyNewtonSolver {
     pub max_iter: usize,
+    pub epi: f64,
+    pub frame: RefCell<usize>,
 }
 
 impl<P: MyProblem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>> Solver<P, L, LS>
     for MyNewtonSolver
 {
+    fn epi(&self) -> f64 {
+        self.epi
+    }
     fn solve<T: std::io::Write>(
         &self,
         p: &P,
@@ -32,15 +39,25 @@ impl<P: MyProblem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<
         input: &DVector<f64>,
         log: &mut T,
     ) -> DVector<f64> {
-        let (g, active_set) = p.my_gradient(input);
+        let (g, ase) = p.my_gradient(input);
         let mut g = g.unwrap();
-        let mut active_set = active_set.unwrap();
+        let mut active_set: Vec<usize>;
+        // TODO! need to restructure
+        // The problem is first frame old_hessian list is not initilized
+        // So it's all zero matrices, which are not correct, and should be initialized.
+        if *self.frame.borrow() == 0 {
+            active_set = (0..1180 * 3).collect();
+        } else {
+            active_set = ase.unwrap();
+        }
+        let mut f = self.frame.borrow_mut();
+        *f += 1;
         let mut h: P::HessianType;
         let mut count = 0;
         let mut res = input.clone();
         let mut old_value = p.apply(&input);
         let mut new_value: f64;
-        while g.norm() > 1e-5 {
+        while g.norm() > self.epi {
             h = p.my_hessian(&res, &active_set, log).unwrap();
             let delta = lin.solve(&h, &g);
             mylog!(log, "linear residual: ", (&h.mul(&delta) - &g).norm());

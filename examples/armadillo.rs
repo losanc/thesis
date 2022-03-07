@@ -18,7 +18,7 @@ use thesis::{
     static_object::{Ground, StaticObject},
 };
 
-const E: f64 = 1e5;
+const E: f64 = 1e6;
 const NU: f64 = 0.33;
 const MIU: f64 = E / (2.0 * (1.0 + NU));
 const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
@@ -26,6 +26,7 @@ const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
 const DT: f64 = 0.01;
 const DIM: usize = 3;
 const CO_NUM: usize = DIM * (DIM + 1);
+const NFIXED_VERT: usize = 20;
 
 macro_rules! energy_function {
     ($vec:ident, $ene:ident,$mat:ident,$inv_mat:ident, $square:expr, $type:ty) => {
@@ -275,6 +276,7 @@ impl MyProblem for Elastic {
             } else {
                 count += 1;
                 small_hessian = self.old_hessian_list.borrow()[i];
+                // println!("{}",small_hessian-ene.hessian());
             }
             for i in 0..CO_NUM {
                 for j in 0..CO_NUM {
@@ -335,7 +337,7 @@ impl Problem for BouncingUpdateScenario {
         //     let mut slice = res.index_mut((DIM * DIM..DIM * i + DIM, 0));
         //     slice += self.circle2.gradient(x.index((DIM * i..DIM * i + DIM, 0)));
         // }
-        let mut slice = res.index_mut((0..20, 0));
+        let mut slice = res.index_mut((0..NFIXED_VERT * DIM, 0));
         for i in slice.iter_mut() {
             *i = 0.0;
         }
@@ -358,11 +360,11 @@ impl Problem for BouncingUpdateScenario {
         //     let mut slice = res.index_mut((DIM * i..DIM* i + DIM, DIM * i..DIM * i + DIM));
         //     slice += self.circle2.hessian(x.index((DIM * i..DIM * i + DIM, 0)));
         // }
-        let mut slice = res.index_mut((0..20, 20..));
+        let mut slice = res.index_mut((0..NFIXED_VERT * DIM, NFIXED_VERT * DIM..));
         for i in slice.iter_mut() {
             *i = 0.0;
         }
-        let mut slice = res.index_mut((20.., 0..20));
+        let mut slice = res.index_mut((NFIXED_VERT * DIM.., 0..NFIXED_VERT * DIM));
         for i in slice.iter_mut() {
             *i = 0.0;
         }
@@ -400,15 +402,16 @@ impl MyProblem for BouncingUpdateScenario {
         //     let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
         //     slice += self.circle2.hessian(x.index((2 * i..2 * i + 2, 0)));
         // }
-        let mut slice = res.index_mut((0..20, 20..));
+        let mut slice = res.index_mut((0..NFIXED_VERT * DIM, NFIXED_VERT * DIM..));
         for i in slice.iter_mut() {
             *i = 0.0;
         }
-        let mut slice = res.index_mut((20.., 0..20));
+        let mut slice = res.index_mut((NFIXED_VERT * DIM.., 0..NFIXED_VERT * DIM));
         for i in slice.iter_mut() {
             *i = 0.0;
         }
-        Some(CsrMatrix::from(&res))
+        let res = CsrMatrix::from(&res);
+        Some(res)
     }
 }
 
@@ -433,13 +436,10 @@ impl ScenarioProblem for BouncingUpdateScenario {
 
 impl BouncingUpdateScenario {
     pub fn new(name: &str) -> Self {
-        // let mut p = armadillo();
         let p = armadillo();
-        // let vec = &mut p.verts;
         let mut g_vec = DVector::zeros(DIM * p.n_verts);
-        for i in 0..p.n_verts {
+        for i in NFIXED_VERT..p.n_verts {
             g_vec[DIM * i + 1] = -9.8;
-            // vec[DIM * i + 1] += 5.0;
         }
 
         Self {
@@ -474,19 +474,22 @@ impl BouncingUpdateScenario {
 
 fn main() {
     let problem = BouncingUpdateScenario::new("armadillotru");
-    let solver = NewtonSolver { max_iter: 30 };
+    let solver = NewtonSolver {
+        max_iter: 30,
+        epi: 0.1,
+    };
     let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
     // let linearsolver = NewtonCG::<NoPre<DMatrix<f64>>>::new();
-    // let linesearch = SimpleLineSearch {
-    //     alpha: 0.9,
-    //     tol: 1e-5,
-    //     epi: 1.0,
-    // };
-    let linesearch = NoLineSearch {};
+    let linesearch = SimpleLineSearch {
+        alpha: 0.9,
+        tol: 1e-5,
+        epi: 1.0,
+    };
+    // let linesearch = NoLineSearch {};
     let mut b = Scenario::new(problem, solver, linearsolver, linesearch);
-    for _i in 0..100 {
+    for _i in 0..20 {
         println!("{}", _i);
-        // b.mystep(false);
+        b.mystep(false);
         b.step(true);
     }
 }

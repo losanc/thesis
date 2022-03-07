@@ -111,6 +111,7 @@ pub trait LineSearch<P: Problem> {
 pub trait Solver<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>>:
     Sized
 {
+    fn epi(&self) -> f64;
     fn solve<T: std::io::Write>(
         &self,
         pro: &P,
