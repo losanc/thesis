@@ -5,6 +5,7 @@ use std::io::Write;
 use std::path::Path;
 mod dim2;
 mod dim3;
+mod energy;
 pub use dim2::*;
 pub use dim3::armadillo;
 use std::collections::HashSet;
