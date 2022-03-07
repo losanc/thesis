@@ -3,7 +3,7 @@ use autodiff::{
     constant_matrix_to_gradients, constant_matrix_to_hessians, vector_to_gradients,
     vector_to_hessians, Gradient, Hessian,
 };
-use mesh::{armadillo, Mesh3d};
+use mesh::{Mesh3d,armadillo};
 use nalgebra::{DMatrix, DVector, SMatrix, SVector};
 use num::{One, Zero};
 use optimization::{JacobianPre, LinearSolver, NewtonCG, NewtonSolver, Problem, SimpleLineSearch};
@@ -354,17 +354,17 @@ impl Problem for BouncingUpdateScenario {
 }
 
 impl MyProblem for BouncingUpdateScenario {
-    // fn my_gradient(&self, x: &DVector<f64>) -> (Option<DVector<f64>>, Option<Vec<usize>>) {
-    //     let res = self.gradient(x).unwrap();
-    //     let mut active_set = Vec::<usize>::new();
-    //     let max = 0.1 * res.amax();
-    //     for (i, r) in res.iter().enumerate() {
-    //         if r.abs() > max {
-    //             active_set.push(i);
-    //         }
-    //     }
-    //     (Some(res), Some(active_set))
-    // }
+    fn my_gradient(&self, x: &DVector<f64>) -> (Option<DVector<f64>>, Option<Vec<usize>>) {
+        let res = self.gradient(x).unwrap();
+        let mut active_set = Vec::<usize>::new();
+        let max = 0.1 * res.amax();
+        for (i, r) in res.iter().enumerate() {
+            if r.abs() > max {
+                active_set.push(i);
+            }
+        }
+        (Some(res), Some(active_set))
+    }
 
     // fn my_hessian<T: std::io::Write>(
     //     &self,

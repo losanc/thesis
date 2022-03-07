@@ -3,6 +3,7 @@ use crate::LinearSolver;
 use crate::MatrixType;
 use crate::Problem;
 use crate::Solver;
+use crate::mylog;
 
 use na::DVector;
 use nalgebra as na;
@@ -26,6 +27,8 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
         let mut h: P::HessianType;
         let mut count = 0;
         let mut res = input.clone();
+        let mut old_value = p.apply(&input);
+        let mut new_value: f64;
         while g.norm() > 0.1 {
             h = p.hessian(&res).unwrap();
             let delta = lin.solve(&h, &g);
@@ -38,12 +41,14 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
             if count > self.max_iter {
                 break;
             }
+            new_value = p.apply(&res);
             mylog!(log, "delta length", delta.norm());
             mylog!(log, "value", p.apply(&res));
             mylog!(log, "value reduction", old_value - new_value);
             mylog!(log, "gradient norm", g.norm());
             mylog!(log, " ", " ");
             count += 1;
+            old_value = new_value;
         }
         mylog!(log, "newton stesp", count);
         res

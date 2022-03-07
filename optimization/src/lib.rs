@@ -120,3 +120,15 @@ pub trait Solver<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: L
         log: &mut T,
     ) -> DVector<f64>;
 }
+
+
+
+#[macro_export]
+macro_rules! mylog {
+    ($log:expr, $infor:tt, $value:expr) => {
+        #[cfg(feature = "log")]
+        {
+            writeln!($log, "{} : {}", $infor, $value).unwrap();
+        }
+    };
+}

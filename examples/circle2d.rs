@@ -360,9 +360,7 @@ impl BouncingUpdateScenario {
             g_vec[2 * i + 1] = -9.8;
             vec[2 * i + 1] += 5.0;
         }
-        #[cfg(feature = "save")]
-        p.save_to_obj(format!("output/bouncingupdate0.obj"));
-
+        
         Self {
             dt: DT,
 
