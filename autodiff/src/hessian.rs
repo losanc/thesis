@@ -4,6 +4,8 @@ use num::{One, Zero};
 use std::fmt;
 use std::ops::Div;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
+
+use crate::MyLog;
 #[derive(Clone, PartialEq, Debug, Copy)]
 pub struct Hessian<const N: usize> {
     value: f64,
@@ -293,3 +295,15 @@ pub fn hessians_to_vector<const M: usize, const N: usize, const P: usize>(
 }
 
 // ----------------vector constructions end
+
+impl<const D: usize> MyLog for Hessian<D> {
+    #[inline]
+    fn myln(self) -> Self {
+        Hessian {
+            value: self.value.ln(),
+            gradient: self.gradient / self.value,
+            hessian: self.hessian / self.value
+                - self.gradient * self.gradient.transpose() / (2.0 * self.value * self.value),
+        }
+    }
+}

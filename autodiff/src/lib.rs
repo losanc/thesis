@@ -5,3 +5,21 @@ pub use gradient::{
 };
 
 pub use hessian::{constant_matrix_to_hessians, hessians_to_vector, vector_to_hessians, Hessian};
+
+pub trait MyLog: Copy {
+    fn myln(self) -> Self;
+}
+
+impl MyLog for f32 {
+    #[inline]
+    fn myln(self) -> Self {
+        self.ln()
+    }
+}
+
+impl MyLog for f64 {
+    #[inline]
+    fn myln(self) -> Self {
+        self.ln()
+    }
+}

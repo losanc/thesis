@@ -4,6 +4,8 @@ use num::{One, Zero};
 use std::fmt;
 use std::ops::Div;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
+
+use crate::MyLog;
 #[derive(Clone, PartialEq, Debug, Copy)]
 pub struct Gradient<const N: usize> {
     value: f64,
@@ -265,3 +267,13 @@ pub fn gradients_to_vector<const M: usize, const N: usize, const P: usize>(
 }
 
 // ----------------vector constructions end
+
+impl<const D: usize> MyLog for Gradient<D> {
+    #[inline]
+    fn myln(self) -> Self {
+        Gradient {
+            value: self.value.ln(),
+            gradient: self.gradient / self.value,
+        }
+    }
+}
