@@ -5,7 +5,7 @@ use std::fmt;
 use std::ops::Div;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
 
-use crate::MyLog;
+use crate::{MyLog, MyScalar};
 #[derive(Clone, PartialEq, Debug, Copy)]
 pub struct Hessian<const N: usize> {
     value: f64,
@@ -305,5 +305,23 @@ impl<const D: usize> MyLog for Hessian<D> {
             hessian: self.hessian / self.value
                 - self.gradient * self.gradient.transpose() / (2.0 * self.value * self.value),
         }
+    }
+}
+
+impl<const N: usize> MyScalar for Hessian<N> {
+    fn as_myscalar_vec<const S: usize>(vec: SVector<f64, S>) -> SVector<Self, S> {
+        let mut res = SVector::<Hessian<N>, S>::zeros();
+        for i in 0..S {
+            res[i].value = vec[i];
+            res[i].gradient[i] = 1.0;
+        }
+        res
+    }
+    fn as_constant_mat<const S: usize>(vec: SMatrix<f64, S, S>) -> SMatrix<Self, S, S> {
+        let mut res = SMatrix::<Hessian<N>, S, S>::zeros();
+        for (i, j) in vec.iter().zip(res.iter_mut()) {
+            j.value = *i;
+        }
+        res
     }
 }

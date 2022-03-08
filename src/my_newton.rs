@@ -9,11 +9,10 @@ pub trait MyProblem: Problem {
         (self.gradient(x), None)
     }
 
-    fn my_hessian<T: std::io::Write>(
+    fn my_hessian(
         &self,
         x: &DVector<f64>,
         _active_set: &[usize],
-        _log: &mut T,
     ) -> Option<<Self as Problem>::HessianType> {
         self.hessian(x)
     }
@@ -58,7 +57,7 @@ impl<P: MyProblem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<
         let mut old_value = p.apply(&input);
         let mut new_value: f64;
         while g.norm() > self.epi {
-            h = p.my_hessian(&res, &active_set, log).unwrap();
+            h = p.my_hessian(&res, &active_set).unwrap();
             let delta = lin.solve(&h, &g);
             mylog!(log, "linear residual: ", (&h.mul(&delta) - &g).norm());
             let scalar = ls.search(p, &res, &delta);

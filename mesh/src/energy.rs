@@ -5,7 +5,7 @@ use nalgebra::{ClosedAdd, ClosedMul, ClosedSub, SMatrix, SVector, Scalar};
 use num::{One, Zero};
 
 pub trait Energy<const L: usize, const D: usize> {
-    fn energy<T>(&self, vec: SVector<T, L>, inv_mat: &SMatrix<T, D, D>, size: f64) -> T
+    fn energy<T>(&self, vec: SVector<T, L>, inv_mat: SMatrix<T, D, D>, size: f64) -> T
     where
         T: Scalar
             + Zero
@@ -20,13 +20,13 @@ pub trait Energy<const L: usize, const D: usize> {
             + Sub<f64, Output = T>;
 }
 
-struct StVenantVirchhoff<const DIM: usize> {
+pub struct StVenantVirchhoff<const DIM: usize> {
     pub mu: f64,
     pub lambda: f64,
 }
 
 impl Energy<6, 2> for StVenantVirchhoff<2> {
-    fn energy<T>(&self, vec: SVector<T, 6>, inv_mat: &SMatrix<T, 2, 2>, size: f64) -> T
+    fn energy<T>(&self, vec: SVector<T, 6>, inv_mat: SMatrix<T, 2, 2>, size: f64) -> T
     where
         T: Scalar
             + Zero
@@ -58,7 +58,7 @@ impl Energy<6, 2> for StVenantVirchhoff<2> {
 }
 
 impl Energy<12, 3> for StVenantVirchhoff<3> {
-    fn energy<T>(&self, vec: SVector<T, 12>, inv_mat: &SMatrix<T, 3, 3>, size: f64) -> T
+    fn energy<T>(&self, vec: SVector<T, 12>, inv_mat: SMatrix<T, 3, 3>, size: f64) -> T
     where
         T: Scalar
             + Zero
@@ -91,13 +91,13 @@ impl Energy<12, 3> for StVenantVirchhoff<3> {
     }
 }
 
-struct NeoHookean<const DIM: usize> {
+pub struct NeoHookean<const DIM: usize> {
     pub mu: f64,
     pub lambda: f64,
 }
 
 impl Energy<6, 2> for NeoHookean<2> {
-    fn energy<T>(&self, vec: SVector<T, 6>, inv_mat: &SMatrix<T, 2, 2>, size: f64) -> T
+    fn energy<T>(&self, vec: SVector<T, 6>, inv_mat: SMatrix<T, 2, 2>, size: f64) -> T
     where
         T: Scalar
             + Zero
@@ -131,7 +131,7 @@ impl Energy<6, 2> for NeoHookean<2> {
 }
 
 impl Energy<12, 3> for NeoHookean<2> {
-    fn energy<T>(&self, vec: SVector<T, 12>, inv_mat: &SMatrix<T, 3, 3>, size: f64) -> T
+    fn energy<T>(&self, vec: SVector<T, 12>, inv_mat: SMatrix<T, 3, 3>, size: f64) -> T
     where
         T: Scalar
             + Zero

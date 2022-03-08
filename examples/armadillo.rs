@@ -217,12 +217,7 @@ impl Problem for Elastic {
 }
 
 impl MyProblem for Elastic {
-    fn my_hessian<T: std::io::Write>(
-        &self,
-        x: &DVector<f64>,
-        active_set: &[usize],
-        log: &mut T,
-    ) -> Option<DMatrix<f64>> {
+    fn my_hessian(&self, x: &DVector<f64>, active_set: &[usize]) -> Option<DMatrix<f64>> {
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
 
         let active_set = active_set
@@ -236,7 +231,6 @@ impl MyProblem for Elastic {
             .collect::<HashSet<usize>>();
 
         let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
-        let mut count = 0;
         for i in 0..self.n_prims {
             let small_hessian;
             let ind = self.prim_connected_vert_indices[i];
@@ -274,7 +268,6 @@ impl MyProblem for Elastic {
                 small_hessian = ene.hessian();
                 self.old_hessian_list.borrow_mut()[i] = small_hessian.clone();
             } else {
-                count += 1;
                 small_hessian = self.old_hessian_list.borrow()[i];
                 // println!("{}",small_hessian-ene.hessian());
             }
@@ -285,7 +278,6 @@ impl MyProblem for Elastic {
             }
         }
 
-        mylog!(log, "skipped triangle", count);
         Some(res)
     }
 }
@@ -385,15 +377,14 @@ impl MyProblem for BouncingUpdateScenario {
         (Some(res), Some(active_set))
     }
 
-    fn my_hessian<T: std::io::Write>(
+    fn my_hessian(
         &self,
         x: &DVector<f64>,
         active_set: &[usize],
-        log: &mut T,
     ) -> Option<<Self as Problem>::HessianType> {
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
-        res = res + self.inertia.my_hessian(x, active_set, log)?;
-        res = res + self.elastic.my_hessian(x, active_set, log)?;
+        res = res + self.inertia.my_hessian(x, active_set)?;
+        res = res + self.elastic.my_hessian(x, active_set)?;
         // for i in 0..self.armadillo.n_verts {
         //     let mut slice = res.index_mut((2 * i..2 * i + 2, 2 * i..2 * i + 2));
         //     slice += self.circle.hessian(x.index((2 * i..2 * i + 2, 0)));

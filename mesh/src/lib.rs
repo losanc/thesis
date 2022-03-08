@@ -1,4 +1,5 @@
-use nalgebra::{DVector, SMatrix};
+use autodiff::MyScalar;
+use nalgebra::{DVector, SMatrix, SVector};
 
 use std::fs::File;
 use std::io::Write;
@@ -8,6 +9,7 @@ mod dim3;
 mod energy;
 pub use dim2::*;
 pub use dim3::armadillo;
+pub use energy::*;
 use std::collections::HashSet;
 
 // D = T - 1, because rust doesn't support const generic operations yet
@@ -67,6 +69,36 @@ impl Mesh2d {
             .unwrap();
         }
     }
+
+    pub fn prim_energy<E: Energy<6, 2>, T>(
+        &self,
+        index: usize,
+        energy: &E,
+        vert_vec: SVector<f64, 6>,
+    ) -> T
+    where
+        T: MyScalar,
+    {
+        let vert_gradient_vec = T::as_myscalar_vec(vert_vec);
+        let inv_mat = self.ma_invs[index];
+        let inv_mat = T::as_constant_mat(inv_mat);
+        let square = self.volumes[index];
+        let ene = energy.energy(vert_gradient_vec, inv_mat, square);
+        ene
+    }
+
+    pub fn get_indices(&self, i: usize) -> [usize; 6] {
+        let ind = self.prim_connected_vert_indices[i];
+        let indices = [
+            ind[0] * 2,
+            ind[0] * 2 + 1,
+            ind[1] * 2,
+            ind[1] * 2 + 1,
+            ind[2] * 2,
+            ind[2] * 2 + 1,
+        ];
+        indices
+    }
 }
 
 impl Mesh3d {
@@ -94,6 +126,41 @@ impl Mesh3d {
             )
             .unwrap();
         }
+    }
+    pub fn prim_energy<E: Energy<12, 3>, T>(
+        &self,
+        index: usize,
+        energy: &E,
+        vert_vec: SVector<f64, 12>,
+    ) -> T
+    where
+        T: MyScalar,
+    {
+        let vert_gradient_vec = T::as_myscalar_vec(vert_vec);
+        let inv_mat = self.ma_invs[index];
+        let inv_mat = T::as_constant_mat(inv_mat);
+        let square = self.volumes[index];
+        let ene = energy.energy(vert_gradient_vec, inv_mat, square);
+        ene
+    }
+
+    pub fn get_indices(&self, i: usize) -> [usize; 12] {
+        let ind = self.prim_connected_vert_indices[i];
+        let indices = [
+            ind[0] * 3,
+            ind[0] * 3 + 1,
+            ind[0] * 3 + 2,
+            ind[1] * 3,
+            ind[1] * 3 + 1,
+            ind[1] * 3 + 2,
+            ind[2] * 3,
+            ind[2] * 3 + 1,
+            ind[2] * 3 + 2,
+            ind[3] * 3,
+            ind[3] * 3 + 1,
+            ind[3] * 3 + 2,
+        ];
+        indices
     }
 }
 
@@ -125,3 +192,6 @@ pub fn volume(
         + (z4 - z1) * ((x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1)))
         / 6.0
 }
+
+pub type StVenantVirchhoff2d = StVenantVirchhoff<2>;
+pub type StVenantVirchhoff3d = StVenantVirchhoff<3>;
