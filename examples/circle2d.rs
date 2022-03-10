@@ -23,12 +23,15 @@ const DT: f64 = 0.03;
 
 const DIM: usize = 2;
 const CO_NUM: usize = DIM * (DIM + 1);
+const DAMP: f64 = 1.0;
+
+type EnergyType = NeoHookean2d;
 
 pub struct BouncingUpdateScenario {
     plane: Mesh2d,
     dt: f64,
     name: String,
-    energy: StVenantVirchhoff2d,
+    energy: EnergyType,
     circle: StaticCircle,
     circle2: StaticCircle,
     old_hessian_list: RefCell<Vec<SMatrix<f64, CO_NUM, CO_NUM>>>,
@@ -190,7 +193,6 @@ impl Problem for BouncingUpdateScenario {
         let mut res = DVector::<f64>::zeros(x.len());
         res += self.inertia_gradient(x);
         res += self.elastic_gradient(x);
-
         res += self.collision_gradient(x);
         Some(res)
     }
@@ -200,7 +202,6 @@ impl Problem for BouncingUpdateScenario {
         res += self.inertia_hessian(x);
         res += self.elastic_hessian(x);
         res += self.collision_hessian(x);
-
         Some(res)
     }
 }
@@ -236,7 +237,7 @@ impl ScenarioProblem for BouncingUpdateScenario {
         self.plane.verts.clone()
     }
     fn set_all_vertices_vector(&mut self, vertices: DVector<f64>) {
-        let velocity = 0.95 * ((&vertices - &self.plane.verts) / self.dt);
+        let velocity = DAMP * ((&vertices - &self.plane.verts) / self.dt);
         self.plane.velos = velocity;
         self.plane.verts = vertices;
     }
@@ -252,19 +253,19 @@ impl ScenarioProblem for BouncingUpdateScenario {
 
 impl BouncingUpdateScenario {
     pub fn new(name: &str) -> Self {
-        let mut p = circle(1.0, 5, None);
+        let mut p = circle(1.0, 6, None);
         let vec = &mut p.verts;
 
         let mut g_vec = DVector::zeros(2 * p.n_verts);
         for i in 0..p.n_verts {
             g_vec[2 * i + 1] = -9.8;
-            vec[2 * i + 1] += 5.0;
+            vec[2 * i + 1] += 10.0;
         }
 
         Self {
             dt: DT,
             mass: DMatrix::from_diagonal(&p.masss),
-            energy: StVenantVirchhoff2d {
+            energy: EnergyType {
                 mu: MIU,
                 lambda: LAMBDA,
             },

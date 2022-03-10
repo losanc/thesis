@@ -7,7 +7,7 @@ pub use crate::linearsolver::*;
 pub use crate::linesearch::*;
 pub use crate::solver::*;
 
-pub trait MatrixType {
+pub trait MatrixType: std::fmt::Debug {
     fn mul(&self, v: &DVector<f64>) -> DVector<f64>;
     fn identity(&self) -> Self;
     fn inverse_diagoanl(&self) -> Self;

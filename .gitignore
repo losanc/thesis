@@ -3,6 +3,7 @@ Cargo.lock
 .DS_Store
 *.obj
 *.txt
+.vscode/
 
 *.pdf
 

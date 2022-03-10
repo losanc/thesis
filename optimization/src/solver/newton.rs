@@ -28,6 +28,7 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
         log: &mut T,
     ) -> DVector<f64> {
         let mut g = p.gradient(input).unwrap();
+        
         let mut h: P::HessianType;
         let mut count = 0;
         let mut res = input.clone();

@@ -39,6 +39,7 @@ pub trait MyScalar:
     + MyLog
     + Mul<f64, Output = Self>
     + Sub<f64, Output = Self>
+    + std::fmt::Display
 {
     fn as_myscalar_vec<const S: usize>(vec: SVector<f64, S>) -> SVector<Self, S>;
     fn as_constant_mat<const S: usize>(vec: SMatrix<f64, S, S>) -> SMatrix<Self, S, S>;

@@ -122,6 +122,9 @@ impl Energy<6, 2> for NeoHookean<2> {
 
         // i3 = matrix_f.determinate()
         let i3 = matrix_f[(0, 0)] * matrix_f[(1, 1)] - matrix_f[(0, 1)] * matrix_f[(1, 0)];
+
+        // invertion test
+        // assert!(i3 > 0.0)
         let i3 = i3 * i3;
         let logi3 = i3.myln();
         let ene = (i1 - logi3 - 2.0) * (self.mu / 2.0) + logi3 * logi3 * (self.lambda / 8.0);

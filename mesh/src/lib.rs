@@ -1,16 +1,15 @@
-use autodiff::MyScalar;
-use nalgebra::{DVector, SMatrix, SVector};
-
-use std::fs::File;
-use std::io::Write;
-use std::path::Path;
+use nalgebra::{DVector, SMatrix};
 mod dim2;
 mod dim3;
 mod energy;
+mod mesh_impl2d;
+mod mesh_impl3d;
+mod util;
 pub use dim2::*;
 pub use dim3::armadillo;
 pub use energy::*;
 use std::collections::HashSet;
+pub use util::*;
 
 // D = T - 1, because rust doesn't support const generic operations yet
 #[derive(Clone)]
@@ -43,155 +42,7 @@ pub struct Mesh<const D: usize, const T: usize> {
 pub type Mesh2d = Mesh<2, 3>;
 pub type Mesh3d = Mesh<3, 4>;
 
-impl Mesh2d {
-    pub fn save_to_obj<P: AsRef<Path>>(&self, path: P) {
-        let mut file = File::create(path).unwrap();
-        writeln!(file, "g obj").unwrap();
-        for i in 0..self.n_verts {
-            writeln!(
-                file,
-                "v  {}  {}  {} ",
-                self.verts[i * 2],
-                self.verts[i * 2 + 1],
-                0.0
-            )
-            .unwrap();
-        }
-        writeln!(file).unwrap();
-        for inds in self.prim_connected_vert_indices.iter() {
-            writeln!(
-                file,
-                "f  {}  {}  {} ",
-                inds[0] + 1,
-                inds[1] + 1,
-                inds[2] + 1
-            )
-            .unwrap();
-        }
-    }
-
-    pub fn prim_energy<E: Energy<6, 2>, T>(
-        &self,
-        index: usize,
-        energy: &E,
-        vert_vec: SVector<f64, 6>,
-    ) -> T
-    where
-        T: MyScalar,
-    {
-        let vert_gradient_vec = T::as_myscalar_vec(vert_vec);
-        let inv_mat = self.ma_invs[index];
-        let inv_mat = T::as_constant_mat(inv_mat);
-        let square = self.volumes[index];
-        let ene = energy.energy(vert_gradient_vec, inv_mat, square);
-        ene
-    }
-
-    pub fn get_indices(&self, i: usize) -> [usize; 6] {
-        let ind = self.prim_connected_vert_indices[i];
-        let indices = [
-            ind[0] * 2,
-            ind[0] * 2 + 1,
-            ind[1] * 2,
-            ind[1] * 2 + 1,
-            ind[2] * 2,
-            ind[2] * 2 + 1,
-        ];
-        indices
-    }
-}
-
-impl Mesh3d {
-    pub fn save_to_obj<P: AsRef<Path>>(&self, path: P) {
-        let mut file = File::create(path).unwrap();
-        writeln!(file, "g obj").unwrap();
-        for i in 0..self.n_verts {
-            writeln!(
-                file,
-                "v  {}  {}  {} ",
-                self.verts[i * 3],
-                self.verts[i * 3 + 1],
-                self.verts[i * 3 + 2],
-            )
-            .unwrap();
-        }
-        writeln!(file).unwrap();
-        for inds in self.surface.as_ref().unwrap().iter() {
-            writeln!(
-                file,
-                "f  {}  {}  {} ",
-                inds[0] + 1,
-                inds[1] + 1,
-                inds[2] + 1,
-            )
-            .unwrap();
-        }
-    }
-    pub fn prim_energy<E: Energy<12, 3>, T>(
-        &self,
-        index: usize,
-        energy: &E,
-        vert_vec: SVector<f64, 12>,
-    ) -> T
-    where
-        T: MyScalar,
-    {
-        let vert_gradient_vec = T::as_myscalar_vec(vert_vec);
-        let inv_mat = self.ma_invs[index];
-        let inv_mat = T::as_constant_mat(inv_mat);
-        let square = self.volumes[index];
-        let ene = energy.energy(vert_gradient_vec, inv_mat, square);
-        ene
-    }
-
-    pub fn get_indices(&self, i: usize) -> [usize; 12] {
-        let ind = self.prim_connected_vert_indices[i];
-        let indices = [
-            ind[0] * 3,
-            ind[0] * 3 + 1,
-            ind[0] * 3 + 2,
-            ind[1] * 3,
-            ind[1] * 3 + 1,
-            ind[1] * 3 + 2,
-            ind[2] * 3,
-            ind[2] * 3 + 1,
-            ind[2] * 3 + 2,
-            ind[3] * 3,
-            ind[3] * 3 + 1,
-            ind[3] * 3 + 2,
-        ];
-        indices
-    }
-}
-
-/// calculates the area of triangle
-#[inline]
-pub fn area(x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) -> f64 {
-    0.5 * ((x1 - x3) * (y2 - y1) - (x1 - x2) * (y3 - y1)).abs()
-}
-
-/// calcuates the volume of tet
-#[allow(clippy::too_many_arguments)]
-#[inline]
-pub fn volume(
-    x1: f64,
-    y1: f64,
-    z1: f64,
-    x2: f64,
-    y2: f64,
-    z2: f64,
-    x3: f64,
-    y3: f64,
-    z3: f64,
-    x4: f64,
-    y4: f64,
-    z4: f64,
-) -> f64 {
-    ((x4 - x1) * ((y2 - y1) * (z3 - z1) - (z2 - z1) * (y3 - y1))
-        + (y4 - y1) * ((z2 - z1) * (x3 - x1) - (x2 - x1) * (z3 - z1))
-        + (z4 - z1) * ((x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1)))
-        / 6.0
-}
-
 pub type StVenantVirchhoff2d = StVenantVirchhoff<2>;
 pub type StVenantVirchhoff3d = StVenantVirchhoff<3>;
+pub type NeoHookean2d = NeoHookean<2>;
+pub type NeoHookean3d = NeoHookean<3>;
