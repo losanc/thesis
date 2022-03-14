@@ -1,18 +1,22 @@
-use std::cell::RefCell;
-
 use nalgebra::DVector;
 use optimization::{LineSearch, LinearSolver, MatrixType, Problem, Solver};
 
 use crate::mylog;
 pub trait MyProblem: Problem {
-    fn my_gradient(&self, x: &DVector<f64>) -> (Option<DVector<f64>>, Option<Vec<usize>>) {
+    fn my_gradient(
+        &self,
+        x: &DVector<f64>,
+    ) -> (
+        Option<DVector<f64>>,
+        Option<std::collections::HashSet<usize>>,
+    ) {
         (self.gradient(x), None)
     }
 
     fn my_hessian(
         &self,
         x: &DVector<f64>,
-        _active_set: &[usize],
+        _active_set: &std::collections::HashSet<usize>,
     ) -> Option<<Self as Problem>::HessianType> {
         self.hessian(x)
     }
@@ -21,7 +25,6 @@ pub trait MyProblem: Problem {
 pub struct MyNewtonSolver {
     pub max_iter: usize,
     pub epi: f64,
-    pub frame: RefCell<usize>,
 }
 
 impl<P: MyProblem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>> Solver<P, L, LS>
@@ -40,17 +43,7 @@ impl<P: MyProblem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<
     ) -> DVector<f64> {
         let (g, ase) = p.my_gradient(input);
         let mut g = g.unwrap();
-        let mut active_set: Vec<usize>;
-        // TODO! need to restructure
-        // The problem is first frame old_hessian list is not initilized
-        // So it's all zero matrices, which are not correct, and should be initialized.
-        if *self.frame.borrow() == 0 {
-            active_set = (0..1180 * 3).collect();
-        } else {
-            active_set = ase.unwrap();
-        }
-        let mut f = self.frame.borrow_mut();
-        *f += 1;
+        let mut active_set = ase.unwrap();
         let mut h: P::HessianType;
         let mut count = 0;
         let mut res = input.clone();

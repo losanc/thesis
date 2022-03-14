@@ -69,6 +69,7 @@ impl Mesh2d {
     }
 
     pub fn elastic_apply<E: Energy<6, 2>>(&self, x: &DVector<f64>, energy: &E) -> f64 {
+        assert_eq!(x.len(), self.n_verts);
         let mut res = 0.0;
         for i in 0..self.n_prims {
             let indices = self.get_indices(i);
@@ -83,6 +84,7 @@ impl Mesh2d {
         res
     }
     pub fn elastic_gradient<E: Energy<6, 2>>(&self, x: &DVector<f64>, energy: &E) -> DVector<f64> {
+        assert_eq!(x.len(), self.n_verts);
         let mut res = DVector::zeros(x.len());
         for i in 0..self.n_prims {
             let indices = self.get_indices(i);
@@ -102,6 +104,7 @@ impl Mesh2d {
     }
 
     pub fn elastic_hessian<E: Energy<6, 2>>(&self, x: &DVector<f64>, energy: &E) -> DMatrix<f64> {
+        assert_eq!(x.len(), self.n_verts);
         let mut res = DMatrix::zeros(x.len(), x.len());
         for i in 0..self.n_prims {
             let indices = self.get_indices(i);
