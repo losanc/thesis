@@ -1,0 +1,20 @@
+use nalgebra::DVector;
+use nalgebra_sparse::CsrMatrix;
+
+use crate::LinearSolver;
+
+pub struct MINRESLinear {}
+
+impl LinearSolver for MINRESLinear {
+    type MatrixType = CsrMatrix<f64>;
+    fn new() -> Self {
+        MINRESLinear {}
+    }
+    #[allow(non_snake_case)]
+    fn solve(&self, A: &Self::MatrixType, b: &DVector<f64>) -> DVector<f64> {
+
+        
+
+        todo!()
+    }
+}

@@ -74,7 +74,7 @@ impl<P: MyProblem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<
             count += 1;
         }
 
-        mylog!(log, "newton stesp", count);
+        mylog!(log, "newton steps", count);
 
         res
     }

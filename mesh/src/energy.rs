@@ -133,7 +133,7 @@ impl Energy<6, 2> for NeoHookean<2> {
     }
 }
 
-impl Energy<12, 3> for NeoHookean<2> {
+impl Energy<12, 3> for NeoHookean<3> {
     fn energy<T>(&self, vec: SVector<T, 12>, inv_mat: SMatrix<T, 3, 3>, size: f64) -> T
     where
         T: Scalar

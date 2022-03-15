@@ -93,7 +93,7 @@ impl BouncingUpdateScenario {
         res
     }
 
-    fn elastic_my_hessian(&self, x: &DVector<f64>, active_set: &[usize]) -> DMatrix<f64> {
+    fn elastic_my_hessian(&self, x: &DVector<f64>, active_set: &std::collections::HashSet<usize>) -> DMatrix<f64> {
         let mut res = DMatrix::zeros(x.len(), x.len());
         let active_set = active_set
             .iter()
@@ -207,13 +207,13 @@ impl Problem for BouncingUpdateScenario {
 }
 
 impl MyProblem for BouncingUpdateScenario {
-    fn my_gradient(&self, x: &DVector<f64>) -> (Option<DVector<f64>>, Option<Vec<usize>>) {
+    fn my_gradient(&self, x: &DVector<f64>) -> (Option<DVector<f64>>, Option<std::collections::HashSet<usize>>) {
         let res = self.gradient(x).unwrap();
-        let mut active_set = Vec::<usize>::new();
+        let mut active_set = std::collections::HashSet::<usize>::new();
         let max = 0.6 * res.amax();
         for (i, r) in res.iter().enumerate() {
             if r.abs() > max {
-                active_set.push(i);
+                active_set.insert(i);
             }
         }
         (Some(res), Some(active_set))
@@ -222,7 +222,7 @@ impl MyProblem for BouncingUpdateScenario {
     fn my_hessian(
         &self,
         x: &DVector<f64>,
-        active_set: &[usize],
+        active_set: &std::collections::HashSet<usize>,
     ) -> Option<<Self as Problem>::HessianType> {
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res = res + self.inertia_hessian(x);

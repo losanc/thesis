@@ -1,16 +1,8 @@
 use autodiff::Hessian;
-use matrixcompare::assert_matrix_eq;
-use mesh::{armadillo, Mesh3d, NeoHookean2d};
+use mesh::{armadillo, Mesh3d, NeoHookean3d};
 use nalgebra::{ComplexField, DMatrix, DVector, SMatrix, SVector};
-use nalgebra_sparse::{
-    ops::{
-        serial::{spadd_csr_prealloc, spmm_csc_prealloc},
-        Op,
-    },
-    pattern::SparsityPattern,
-    CsrMatrix,
-};
-use optimization::{JacobianPre, LinearSolver, NewtonCG, NewtonSolver, Problem, SimpleLineSearch};
+use nalgebra_sparse::{pattern::SparsityPattern, CsrMatrix};
+use optimization::{JacobianPre, LinearSolver, NewtonCG, NewtonSolver, Problem, SimpleLineSearch, linesearch, NoLineSearch, linearsolver, PivLUCsr};
 use std::{cell::RefCell, collections::HashSet};
 use thesis::{
     my_newton::MyProblem,
@@ -27,7 +19,7 @@ const CO_NUM: usize = DIM * (DIM + 1);
 const NFIXED_VERT: usize = 20;
 const DAMP: f64 = 1.0;
 
-type EnergyType = NeoHookean2d;
+type EnergyType = NeoHookean3d;
 
 pub struct BouncingUpdateScenario {
     armadillo: Mesh3d,
@@ -82,6 +74,7 @@ impl BouncingUpdateScenario {
         }
         res
     }
+
     fn elastic_my_hessian_new(
         &self,
         x: &DVector<f64>,
@@ -92,42 +85,38 @@ impl BouncingUpdateScenario {
         //     .iter()
         //     .map(|x| x / DIM)
         //     .collect::<HashSet<usize>>();
-        let update_triangle_list = active_set
-            .iter()
-            .map(|x| self.armadillo.vert_connected_prim_indices[*x].clone())
-            .flatten()
-            .collect::<HashSet<usize>>();
+        // let update_triangle_list = active_set
+        //     .iter()
+        //     .map(|x| self.armadillo.vert_connected_prim_indices[*x].clone())
+        //     .flatten()
+        //     .collect::<HashSet<usize>>();
+        // let another_active_set = update_triangle_list
+        //     .iter()
+        //     .map(|x| self.armadillo.prim_connected_vert_indices[*x]);
 
-        for i in 0..self.armadillo.n_prims {
+        for count in 0..self.armadillo.n_prims {
             let energy: Hessian<CO_NUM>;
-            let hessian: SMatrix<f64,CO_NUM,CO_NUM>;
-            let indices = self.armadillo.get_indices(i);
-            if update_triangle_list.contains(&i) {
-                let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
-                
-                vert_vec
-                    .iter_mut()
-                    .zip(indices.iter())
-                    .for_each(|(g_i, i)| *g_i = x[*i]);
-                energy = self.armadillo.prim_energy(i, &self.energy, vert_vec);
-                hessian = energy.hessian();
-                self.old_hessian_list.borrow_mut()[i] = hessian;
-            }else{
-                hessian = self.old_hessian_list.borrow()[i];
+            let small_hessian: SMatrix<f64, CO_NUM, CO_NUM>;
+            let indices = self.armadillo.get_indices(count);
+            // if update_triangle_list.contains(&i) {
+            let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
 
-            }
-                for i in 0..CO_NUM {
-                    for j in 0..CO_NUM {
-                        if indices[i] < NFIXED_VERT * DIM || indices[j] < NFIXED_VERT * DIM {
-                            continue;
-                        }
-                        // if !active_set.contains(&(indices[i]/DIM)) && !active_set.contains(&(indices[j]/DIM)) {
-                        //     continue;
-                        // }
-                        let entry = old.index_entry_mut(indices[i], indices[j]);
+            vert_vec
+                .iter_mut()
+                .zip(indices.iter())
+                .for_each(|(g_i, i)| *g_i = x[*i]);
+            energy = self.armadillo.prim_energy(count, &self.energy, vert_vec);
+            small_hessian = energy.hessian();
+
+            for i in 0..CO_NUM {
+                for j in 0..CO_NUM {
+                    let r = indices[i];
+                    let c = indices[j];
+                    if active_set.contains(&(r / DIM)) || active_set.contains(&(c / DIM)) {
+                        let entry = old.index_entry_mut(r, c);
                         match entry {
                             nalgebra_sparse::SparseEntryMut::NonZero(refe) => {
-                                *refe += hessian[(i, j)];
+                                *refe += small_hessian[(i, j)];
                             }
                             nalgebra_sparse::SparseEntryMut::Zero => {
                                 panic!("this shouldn't happent");
@@ -135,6 +124,8 @@ impl BouncingUpdateScenario {
                         }
                     }
                 }
+                // }
+            }
             // }
             // else {
             //     let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
@@ -232,12 +223,14 @@ impl MyProblem for BouncingUpdateScenario {
     ) {
         let res = self.gradient(x).unwrap();
         let mut active_set = std::collections::HashSet::<usize>::new();
-        let max = 0.1 * res.amax();
+        let max = 0.01 * res.amax();
         for (i, r) in res.iter().enumerate() {
             if r.abs() > max {
-                active_set.insert(i / DIM);
+                active_set.insert(i  );
             }
         }
+
+
         (Some(res), Some(active_set))
     }
 
@@ -246,22 +239,97 @@ impl MyProblem for BouncingUpdateScenario {
         x: &DVector<f64>,
         active_set: &std::collections::HashSet<usize>,
     ) -> Option<<Self as Problem>::HessianType> {
+
+        let res = self.gradient(x).unwrap();
+        let mut active_set = std::collections::HashSet::<usize>::new();
+        let max = 0.1 * res.amax();
+        for (i, r) in res.iter().enumerate() {
+            if r.abs() > max {
+                active_set.insert(i  );
+            }
+        }
+
+        let update_triangle_list = active_set
+            .iter()
+            .map(|x| self.armadillo.vert_connected_prim_indices[x/DIM].clone())
+            .flatten()
+            .collect::<HashSet<usize>>();
+        let another_active_set = update_triangle_list
+            .iter()
+            .map(|x| self.armadillo.prim_connected_vert_indices[*x])
+            .flatten()
+            .collect::<HashSet<usize>>();
+
+        let update_triangle_list = another_active_set
+            .iter()
+            .map(|x| self.armadillo.vert_connected_prim_indices[x/DIM].clone())
+            .flatten()
+            .collect::<HashSet<usize>>();
+        let another_active_set = update_triangle_list
+            .iter()
+            .map(|x| self.armadillo.prim_connected_vert_indices[*x])
+            .flatten()
+            .collect::<HashSet<usize>>();
+
         let mut old_matrix = self.old_elastic_hessian.borrow_mut();
         // let active_set: std::collections::HashSet<usize> = (0..x.len()).collect();
         // clear active entries
+        let real = self.armadillo.elastic_hessian(x, &self.energy);
+        let real = CsrMatrix::from(&real);
+        
+
         for (r, c, v) in old_matrix.triplet_iter_mut() {
-            // if active_set.contains(&(c / DIM)) || active_set.contains(&(r / DIM)) {
+            if r < NFIXED_VERT * DIM || c < NFIXED_VERT * DIM {
                 *v = 0.0;
-                // continue;
-            // } else if r < NFIXED_VERT * DIM || c < NFIXED_VERT * DIM {
-                // *v = 0.0;
-                // continue;
-            // }
+                continue;
+            }
+            let real_v = real.index_entry(r, c);
+            let mut real_value = 0.0;
+            match real_v {
+                nalgebra_sparse::SparseEntry::NonZero(refe) => {
+                    real_value = *refe;
+                }
+                nalgebra_sparse::SparseEntry::Zero => {
+                    panic!("shouldn't happen")
+                }
+            }
+            if another_active_set.contains(&(c/DIM )) || another_active_set.contains(&(r/DIM)) {
+                // if true{
+                *v  =real_value;
+               
+            // } else{
+                // println!("{}",real_value- *v);
+            }
         }
 
-        self.elastic_my_hessian_new(x, &mut old_matrix, &active_set);
+        // let mut construct = CsrMatrix::try_from_pattern_and_values(
+        //     self.hessian_pattern.clone(),
+        //     vec![0.0; old_matrix.nnz()],
+        // )
+        // .unwrap();
 
-        Some(&self.sparse_mass + old_matrix.clone())
+        // self.elastic_my_hessian_new(x, &mut construct, &active_set);
+
+        // for (r, c, v) in construct.triplet_iter_mut() {
+        //     if !active_set.contains(&(c / DIM)) && !active_set.contains(&(r / DIM)) {
+        //         if v.abs() > 1e-3 {
+        //             println!("{}", v);
+        //         }
+        //     } else {
+        //         if (*v - real[(r, c)]).abs() > 1e-3 {
+        //             println!("{} {} {} ", v, real[(r, c)], (*v - real[(r, c)]).abs());
+        //         }
+        //     }
+        // }
+
+        // for (r, c, v) in construct.triplet_iter_mut() {
+        //     if r < NFIXED_VERT * DIM || c < NFIXED_VERT * DIM {
+        //         *v = 0.0;
+        //     }
+        // }
+
+        // Some(&self.sparse_mass + &*old_matrix + construct)
+        Some(&self.sparse_mass + &*old_matrix)
 
         // let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         // res = res + self.inertia_hessian(x);
@@ -356,12 +424,14 @@ fn main() {
         epi: 0.1,
     };
     let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
+    // let linearsolver  = PivLUCsr{};
     // let linearsolver = NewtonCG::<NoPre<DMatrix<f64>>>::new();
     let linesearch = SimpleLineSearch {
         alpha: 0.9,
         tol: 1e-5,
-        epi: 1.0,
+        epi: 0.0,
     };
+    // let linesearch = NoLineSearch{};
     // let linesearch = NoLineSearch {};
     let mut b = Scenario::new(problem, solver, linearsolver, linesearch);
     for _i in 0..100 {
