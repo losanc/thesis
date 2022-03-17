@@ -324,4 +324,9 @@ impl<const N: usize> MyScalar for Hessian<N> {
         }
         res
     }
+    #[inline]
+    fn to_consant(&mut self) {
+        self.gradient = SVector::<f64, N>::zeros();
+        self.hessian = SMatrix::<f64, N, N>::zeros();
+    }
 }

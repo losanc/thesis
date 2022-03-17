@@ -11,10 +11,7 @@ impl LinearSolver for MINRESLinear {
         MINRESLinear {}
     }
     #[allow(non_snake_case)]
-    fn solve(&self, A: &Self::MatrixType, b: &DVector<f64>) -> DVector<f64> {
-
-        
-
+    fn solve(&self, _A: &Self::MatrixType, _b: &DVector<f64>) -> DVector<f64> {
         todo!()
     }
 }

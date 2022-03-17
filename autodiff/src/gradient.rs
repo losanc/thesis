@@ -295,4 +295,8 @@ impl<const N: usize> MyScalar for Gradient<N> {
         }
         res
     }
+    #[inline]
+    fn to_consant(&mut self) {
+        self.gradient = SVector::<f64, N>::zeros();
+    }
 }

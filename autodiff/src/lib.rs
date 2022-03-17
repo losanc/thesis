@@ -43,6 +43,7 @@ pub trait MyScalar:
 {
     fn as_myscalar_vec<const S: usize>(vec: SVector<f64, S>) -> SVector<Self, S>;
     fn as_constant_mat<const S: usize>(vec: SMatrix<f64, S, S>) -> SMatrix<Self, S, S>;
+    fn to_consant(&mut self);
 }
 impl MyScalar for f64 {
     #[inline]
@@ -53,4 +54,6 @@ impl MyScalar for f64 {
     fn as_constant_mat<const S: usize>(vec: SMatrix<f64, S, S>) -> SMatrix<Self, S, S> {
         vec
     }
+    #[inline]
+    fn to_consant(&mut self) {}
 }

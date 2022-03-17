@@ -93,7 +93,11 @@ impl BouncingUpdateScenario {
         res
     }
 
-    fn elastic_my_hessian(&self, x: &DVector<f64>, active_set: &std::collections::HashSet<usize>) -> DMatrix<f64> {
+    fn elastic_my_hessian(
+        &self,
+        x: &DVector<f64>,
+        active_set: &std::collections::HashSet<usize>,
+    ) -> DMatrix<f64> {
         let mut res = DMatrix::zeros(x.len(), x.len());
         let active_set = active_set
             .iter()
@@ -207,7 +211,13 @@ impl Problem for BouncingUpdateScenario {
 }
 
 impl MyProblem for BouncingUpdateScenario {
-    fn my_gradient(&self, x: &DVector<f64>) -> (Option<DVector<f64>>, Option<std::collections::HashSet<usize>>) {
+    fn my_gradient(
+        &self,
+        x: &DVector<f64>,
+    ) -> (
+        Option<DVector<f64>>,
+        Option<std::collections::HashSet<usize>>,
+    ) {
         let res = self.gradient(x).unwrap();
         let mut active_set = std::collections::HashSet::<usize>::new();
         let max = 0.6 * res.amax();

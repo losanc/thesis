@@ -45,7 +45,5 @@ impl LinearSolver for PivLUCsr {
         let dec = A.full_piv_lu();
         let res = dec.solve(b).unwrap();
         res
-
     }
 }
-

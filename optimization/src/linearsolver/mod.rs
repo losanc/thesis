@@ -1,8 +1,8 @@
 mod csccholesky;
 mod direct;
-mod newtoncg;
 mod minres;
+mod newtoncg;
 pub use csccholesky::CscCholeskySolver;
 pub use direct::*;
-pub use newtoncg::{JacobianPre, NewtonCG, NoPre, PreConditioner};
 pub use minres::*;
+pub use newtoncg::{JacobianPre, NewtonCG, NoPre, PreConditioner};

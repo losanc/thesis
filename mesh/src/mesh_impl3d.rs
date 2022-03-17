@@ -53,6 +53,49 @@ impl Mesh3d {
         ene
     }
 
+    pub fn prim_energy_with_fixed<E: Energy<12, 3>, T>(
+        &self,
+        index: usize,
+        energy: &E,
+        vert_vec: SVector<f64, 12>,
+        n_fixed: usize,
+    ) -> T
+    where
+        T: MyScalar,
+    {
+        let mut vert_gradient_vec = T::as_myscalar_vec(vert_vec);
+        let [v1, v2, v3, v4] = self.prim_connected_vert_indices[index];
+
+        if v1 < n_fixed {
+            vert_gradient_vec[0].to_consant();
+            vert_gradient_vec[1].to_consant();
+            vert_gradient_vec[2].to_consant();
+        }
+        if v2 < n_fixed {
+            vert_gradient_vec[3].to_consant();
+            vert_gradient_vec[4].to_consant();
+            vert_gradient_vec[5].to_consant();
+        }
+
+        if v3 < n_fixed {
+            vert_gradient_vec[6].to_consant();
+            vert_gradient_vec[7].to_consant();
+            vert_gradient_vec[8].to_consant();
+        }
+
+        if v4 < n_fixed {
+            vert_gradient_vec[9].to_consant();
+            vert_gradient_vec[10].to_consant();
+            vert_gradient_vec[11].to_consant();
+        }
+
+        let inv_mat = self.ma_invs[index];
+        let inv_mat = T::as_constant_mat(inv_mat);
+        let square = self.volumes[index];
+        let ene = energy.energy(vert_gradient_vec, inv_mat, square);
+        ene
+    }
+
     pub fn get_indices(&self, i: usize) -> [usize; 12] {
         let ind = self.prim_connected_vert_indices[i];
         let indices = [
