@@ -1,7 +1,6 @@
 use std::marker::PhantomData;
 
 use nalgebra::DVector;
-use nalgebra_sparse::CsrMatrix;
 
 use crate::{LinearSolver, MatrixType};
 
@@ -29,11 +28,11 @@ impl<T: MatrixType> LinearSolver for MINRESLinear<T> {
 
         let mut x = DVector::<f64>::zeros(rhs.len());
 
-        let mut v_new = rhs.clone();
-        let mut v_old = DVector::<f64>::zeros(rhs.len());
+        let mut v_new;
+        let mut v_old; 
         let mut v = DVector::<f64>::zeros(rhs.len());
         let mut p_old = DVector::<f64>::zeros(rhs.len());
-        let mut p_oold = DVector::<f64>::zeros(rhs.len());
+        let mut p_oold;
         let mut p = DVector::<f64>::zeros(rhs.len());
 
         v_new = rhs - A.mul(&x);
@@ -44,11 +43,10 @@ impl<T: MatrixType> LinearSolver for MINRESLinear<T> {
 
         v_new *= 1.0 / beta_new;
 
-        for j in 0..10000000 {
+        for _ in 0..10000000 {
             let beta = beta_new;
             v_old = v.clone();
             v = v_new.clone();
-            v_new = v_old.clone();
 
             v_new = A.mul(&v);
 
@@ -90,7 +88,7 @@ impl<T: MatrixType> LinearSolver for MINRESLinear<T> {
         println!("{res_norm}");
         panic!("shouldn't");
 
-        x
+        // x
     }
 }
 
