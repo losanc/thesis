@@ -45,6 +45,7 @@ impl<T: MatrixType> PreConditioner for NoPre<T> {
 pub struct NewtonCG<P: PreConditioner> {
     // it has no use, but mark the type P
     phantom: PhantomData<P>,
+    pub tol: f64,
 }
 
 #[allow(non_snake_case, clippy::many_single_char_names)]
@@ -54,6 +55,7 @@ impl<P: PreConditioner> LinearSolver for NewtonCG<P> {
     fn new() -> Self {
         NewtonCG {
             phantom: PhantomData,
+            tol: 0.001,
         }
     }
 
@@ -84,7 +86,7 @@ impl<P: PreConditioner> LinearSolver for NewtonCG<P> {
             x += alpha * &p;
             r -= alpha * (A.mul(&p));
 
-            if r.norm() < 0.001 {
+            if r.norm() < self.tol {
                 return x;
             }
             z = m_inv.mul(&r);

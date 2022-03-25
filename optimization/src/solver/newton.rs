@@ -35,10 +35,15 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
         let mut old_value = p.apply(&input);
         let mut new_value: f64;
         while g.norm() > self.epi {
+            let start = std::time::Instant::now();
             h = p.hessian(&res).unwrap();
-            println!("finished hessian");
+            let duration = start.elapsed();
+            mylog!(log, "hessian time spend: ", duration.as_secs_f32());
+
+            let start = std::time::Instant::now();
             let delta = lin.solve(&h, &g);
-            println!("finished linear solver");
+            let duration = start.elapsed();
+            mylog!(log, "linear solver time spend: ", duration.as_secs_f32());
             mylog!(log, "linear residual: ", (&h.mul(&delta) - &g).norm());
             let scalar = ls.search(p, &res, &delta);
             mylog!(log, "line search scalar: ", scalar);

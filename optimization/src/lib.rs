@@ -11,6 +11,7 @@ pub trait MatrixType: std::fmt::Debug {
     fn mul(&self, v: &DVector<f64>) -> DVector<f64>;
     fn identity(&self) -> Self;
     fn inverse_diagoanl(&self) -> Self;
+    fn to_dmatrix(&self) -> DMatrix<f64>;
 }
 impl MatrixType for DMatrix<f64> {
     #[inline]
@@ -24,6 +25,10 @@ impl MatrixType for DMatrix<f64> {
     #[inline]
     fn inverse_diagoanl(&self) -> Self {
         DMatrix::<f64>::from_diagonal(&(self.map_diagonal(|x| 1.0 / x)))
+    }
+
+    fn to_dmatrix(&self) -> DMatrix<f64> {
+        self.clone()
     }
 }
 
@@ -41,6 +46,10 @@ impl MatrixType for CscMatrix<f64> {
         let mut mat = self.diagonal_as_csc();
         mat.values_mut().iter_mut().for_each(|x| *x = 1.0 / *x);
         mat
+    }
+
+    fn to_dmatrix(&self) -> DMatrix<f64> {
+        DMatrix::<f64>::from(self)
     }
 }
 
@@ -60,6 +69,9 @@ impl MatrixType for CooMatrix<f64> {
         assert_eq!(mat.nnz(), mat.nrows());
         mat.values_mut().iter_mut().for_each(|x| *x = 1.0 / *x);
         mat
+    }
+    fn to_dmatrix(&self) -> DMatrix<f64> {
+        DMatrix::<f64>::from(self)
     }
 }
 
@@ -162,5 +174,8 @@ impl MatrixType for CsrMatrix<f64> {
         let mut mat = self.diagonal_as_csr();
         mat.values_mut().iter_mut().for_each(|x| *x = 1.0 / *x);
         mat
+    }
+    fn to_dmatrix(&self) -> DMatrix<f64> {
+        DMatrix::<f64>::from(self)
     }
 }
