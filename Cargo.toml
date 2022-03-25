@@ -24,7 +24,8 @@ exclude = [ "./nalgebra" ]
 save = []
 log = ["optimization/log"]
 
-[profile.release]
-lto = "fat"
-codegen-units = 1
-panic = "abort"
+#[profile.release]
+#debug = true
+#lto = "fat"
+#codegen-units = 1
+#panic = "abort"
