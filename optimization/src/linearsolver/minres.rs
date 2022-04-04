@@ -29,7 +29,7 @@ impl<T: MatrixType> LinearSolver for MINRESLinear<T> {
         let mut x = DVector::<f64>::zeros(rhs.len());
 
         let mut v_new;
-        let mut v_old; 
+        let mut v_old;
         let mut v = DVector::<f64>::zeros(rhs.len());
         let mut p_old = DVector::<f64>::zeros(rhs.len());
         let mut p_oold;

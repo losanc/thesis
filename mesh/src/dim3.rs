@@ -175,7 +175,7 @@ pub fn armadillo() -> Mesh3d {
     Mesh3d {
         n_verts: 1180,
         n_prims: 3717,
-        surface: Some(surface),
+        surface: Some(surface.iter().map(|x| *x).collect::<Vec<[usize; 3]>>()),
         verts,
         velos: DVector::<f64>::zeros(1180 * 3),
         accls: DVector::<f64>::zeros(1180 * 3),

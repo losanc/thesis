@@ -344,7 +344,7 @@ pub fn circle(r: f64, res: usize, d: Option<f64>) -> Mesh<2, 3> {
     Mesh {
         n_verts,
         n_prims,
-        surface: Some(surface),
+        surface: Some(surface.iter().map(|x| *x).collect::<Vec<[usize; 2]>>()),
 
         verts: vertices,
         velos: DVector::<f64>::zeros(2 * n_verts),

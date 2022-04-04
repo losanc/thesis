@@ -5,9 +5,7 @@ use nalgebra_sparse::{
     ops::{serial::spadd_csr_prealloc, Op},
     CsrMatrix,
 };
-use optimization::{
-    JacobianPre, LinearSolver, MINRESLinear, NewtonCG, NewtonSolver, Problem, SimpleLineSearch,
-};
+use optimization::{LinearSolver, MINRESLinear, NewtonSolver, Problem, SimpleLineSearch};
 use std::cell::RefCell;
 use thesis::{
     get_csr_index_matrix,
@@ -16,7 +14,8 @@ use thesis::{
 };
 
 const E: f64 = 1e5;
-const NU: f64 = 0.33;
+// const NU: f64 = 0.33;
+const NU: f64 =0.0;
 const MIU: f64 = E / (2.0 * (1.0 + NU));
 const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
 const DT: f64 = 0.01;
@@ -24,9 +23,9 @@ const DIM: usize = 3;
 const CO_NUM: usize = DIM * (DIM + 1);
 const NFIXED_VERT: usize = 20;
 const DAMP: f64 = 1.0;
-const TOTAL_FRAME: usize = 50;
+const TOTAL_FRAME: usize = 100;
 
-type EnergyType = NeoHookean3d;
+type EnergyType = mesh::StVenantVirchhoff3d;
 
 pub struct BouncingUpdateScenario {
     armadillo: Mesh3d,
@@ -102,6 +101,7 @@ impl BouncingUpdateScenario {
         &self.mass
     }
 }
+static  mut count_static:usize =0;
 impl Problem for BouncingUpdateScenario {
     type HessianType = CsrMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
@@ -127,16 +127,39 @@ impl Problem for BouncingUpdateScenario {
         // dense version of hessian matrix
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res = res + self.inertia_hessian(x);
-        res += self.armadillo.elastic_hessian(x, &self.energy);
+        let mut elastic_matrix =  self.armadillo.elastic_hessian(x, &self.energy);
 
-        let mut slice = res.index_mut((0..NFIXED_VERT * DIM, NFIXED_VERT * DIM..));
+        let mut slice = elastic_matrix.index_mut((0..NFIXED_VERT * DIM, 0..));
         for i in slice.iter_mut() {
             *i = 0.0;
         }
-        let mut slice = res.index_mut((NFIXED_VERT * DIM.., 0..NFIXED_VERT * DIM));
+        let mut slice = elastic_matrix.index_mut((NFIXED_VERT * DIM.., 0..NFIXED_VERT * DIM));
         for i in slice.iter_mut() {
             *i = 0.0;
         }
+
+        res += elastic_matrix;
+
+
+        unsafe {
+            let data = res
+                .as_slice()
+                .iter()
+                .map(|x| x.to_ne_bytes())
+                .flatten()
+                .collect::<Vec<u8>>();
+
+            let mut file =
+                std::fs::File::create(format!("output/matrix/hessian{count_static}.txt")).unwrap();
+
+            use std::io::Write;
+            file.write_all(&data).unwrap();
+            self.armadillo.save_to_obj(format!("output/matrix/mesh{count_static}.obj"));
+            count_static += 1;
+        }
+
+
+
         Some(CsrMatrix::from(&res))
 
         // sparse version of hessian matrix
@@ -161,7 +184,7 @@ impl MyProblem for BouncingUpdateScenario {
     ) {
         let res = self.gradient(x).unwrap();
         let mut active_set = std::collections::HashSet::<usize>::new();
-        let max = 0.1 * res.amax();
+        let max = 0.01 * res.amax();
         for (i, r) in res.iter().enumerate() {
             if r.abs() > max {
                 active_set.insert(i);
@@ -175,14 +198,24 @@ impl MyProblem for BouncingUpdateScenario {
         x: &DVector<f64>,
         active_set: &std::collections::HashSet<usize>,
     ) -> Option<<Self as Problem>::HessianType> {
+        // old_matrix is only elastic matrix
         let mut old_matrix = self.old_elastic_hessian.borrow_mut();
-        self.elastic_my_hessian_new(x, &mut old_matrix, active_set);
+        // self.elastic_my_hessian_new(x, &mut old_matrix, active_set);
+        // this is the real elastic hessian matrix
+        let real = self.armadillo.elastic_hessian(x, &self.energy);
+
+        for (r, c, v) in old_matrix.triplet_iter_mut() {
+            if active_set.contains(&r) || active_set.contains(&c) {
+                *v = real[(r, c)];
+            }
+        }
 
         for (r, c, v) in old_matrix.triplet_iter_mut() {
             if r < NFIXED_VERT * DIM || c < NFIXED_VERT * DIM {
                 *v = 0.0;
             }
         }
+
         let mut res = old_matrix.clone();
         spadd_csr_prealloc(1.0, &mut res, 1.0, Op::NoOp(&self.sparse_mass)).unwrap();
         Some(res)
@@ -273,12 +306,11 @@ fn main() {
         max_iter: 30,
         epi: 0.1,
     };
-    // let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
     let mut linearsolver = MINRESLinear::new();
-    linearsolver.epi = 0.001;
+    linearsolver.epi = 0.00001;
     let linesearch = SimpleLineSearch {
         alpha: 0.9,
-        tol: 1e-5,
+        tol: 0.0,
         epi: 0.0,
     };
     let mut b = Scenario::new(problem, solver, linearsolver, linesearch);
@@ -286,8 +318,8 @@ fn main() {
     let _start_time = std::time::Instant::now();
     for _i in 0..TOTAL_FRAME {
         println!("{}", _i);
-        b.mystep(true);
-        // b.step(true);
+        // b.mystep(true);
+        b.step(true);
     }
     #[cfg(not(feature = "log"))]
     {
