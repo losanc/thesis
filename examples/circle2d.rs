@@ -7,7 +7,6 @@ use nalgebra::{DMatrix, SMatrix};
 use optimization::*;
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::convert::TryInto;
 use std::string::String;
 use thesis::my_newton::MyProblem;
 
@@ -128,8 +127,6 @@ impl BouncingUpdateScenario {
     }
 }
 
-static mut count: usize = 0;
-
 impl Problem for BouncingUpdateScenario {
     type HessianType = DMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
@@ -153,64 +150,6 @@ impl Problem for BouncingUpdateScenario {
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res += self.inertia_hessian(x);
         res += self.plane.elastic_hessian(x, &self.energy);
-        
-
-        // let surface_vertices = self
-        //     .plane
-        //     .surface
-        //     .as_ref()
-        //     .unwrap()
-        //     .iter()
-        //     .flatten()
-        //     .collect::<std::collections::HashSet<_>>();
-        // let zero = DVector::zeros(x.len());
-        // let zero_row = zero.transpose();
-        // for v_i in surface_vertices {
-        //     elastic_matrix.set_column(v_i * 2, &zero);
-        //     elastic_matrix.set_column(v_i * 2 + 1, &zero);
-        //     elastic_matrix.set_row(v_i * 2, &zero_row);
-        //     elastic_matrix.set_row(v_i * 2 + 1, &zero_row);
-        //     elastic_matrix[(2 * v_i, 2 * v_i)] = 1.0;
-        //     elastic_matrix[(2 * v_i + 1, 2 * v_i + 1)] = 1.0;
-        // }
-        // // invere.as_mut_slice().iter_mut().for_each(|x| *x = *x*1e7);
-        // let inverser = elastic_matrix.clone().try_inverse().unwrap();
-
-        // // let ident = DMatrix::identity(x.len(), x.len());
-        // // let inverse_matrix = elastic_matrix.clone().svd(true,true).solve(&ident,1e-10).unwrap();
-        unsafe {
-            let elastic_matrix = self.plane.elastic_hessian(x, &self.energy);
-            let data = elastic_matrix
-                .as_slice()
-                .iter()
-                .map(|x| x.to_ne_bytes())
-                .flatten()
-                .collect::<Vec<u8>>();
-
-            let mut file =
-                std::fs::File::create(format!("output/matrix/hessian{count}.txt")).unwrap();
-
-            use std::io::Write;
-            file.write_all(&data).unwrap();
-            self.plane.save_to_obj(format!("output/matrix/mesh{count}.obj"));
-            count += 1;
-        }
-
-        // let data = inverse_matrix
-        //     .as_slice()
-        //     .iter()
-        //     .map(|x| x.to_ne_bytes())
-        //     .flatten()
-        //     .collect::<Vec<u8>>();
-        // unsafe {
-        //     let mut file =
-        //         std::fs::File::create(format!("output/matrix/hessian{count}.txt")).unwrap();
-
-        //     count += 1;
-
-        //     use std::io::Write;
-        //     file.write_all(&data).unwrap();
-        // }
         res += self.collision_hessian(x);
         Some(res)
     }
@@ -269,7 +208,7 @@ impl ScenarioProblem for BouncingUpdateScenario {
 
 impl BouncingUpdateScenario {
     pub fn new(name: &str) -> Self {
-        let mut p = plane(2, 2, None);
+        let mut p = circle(1.0, 5, None);
         p.save_to_obj("a.obj");
         let vec = &mut p.verts;
 

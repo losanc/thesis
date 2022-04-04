@@ -5,9 +5,7 @@ use nalgebra_sparse::{
     ops::{serial::spadd_csr_prealloc, Op},
     CsrMatrix,
 };
-use optimization::{
-    JacobianPre, LinearSolver, MINRESLinear, NewtonCG, NewtonSolver, Problem, SimpleLineSearch,
-};
+use optimization::{JacobianPre, LinearSolver, NewtonCG, NewtonSolver, Problem, SimpleLineSearch};
 use std::cell::RefCell;
 use thesis::{
     get_csr_index_matrix,
@@ -24,7 +22,7 @@ const DIM: usize = 3;
 const CO_NUM: usize = DIM * (DIM + 1);
 const NFIXED_VERT: usize = 20;
 const DAMP: f64 = 1.0;
-const TOTAL_FRAME: usize = 50;
+const TOTAL_FRAME: usize = 200;
 
 type EnergyType = NeoHookean3d;
 
@@ -191,7 +189,6 @@ impl MyProblem for BouncingUpdateScenario {
 
 impl ScenarioProblem for BouncingUpdateScenario {
     fn initial_guess(&self) -> DVector<f64> {
-        // print!("{:?}",CsrMatrix::from(&self.armadillo.elastic_hessian(&self.armadillo.verts, &self.energy)));
         self.armadillo.verts.clone()
     }
     fn set_all_vertices_vector(&mut self, vertices: DVector<f64>) {
@@ -271,11 +268,9 @@ fn main() {
 
     let solver = NewtonSolver {
         max_iter: 30,
-        epi: 0.1,
+        epi: 1e-3,
     };
-    // let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
-    let mut linearsolver = MINRESLinear::new();
-    linearsolver.epi = 0.001;
+    let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
     let linesearch = SimpleLineSearch {
         alpha: 0.9,
         tol: 1e-5,
@@ -283,15 +278,9 @@ fn main() {
     };
     let mut b = Scenario::new(problem, solver, linearsolver, linesearch);
 
-    let _start_time = std::time::Instant::now();
     for _i in 0..TOTAL_FRAME {
         println!("{}", _i);
         b.mystep(true);
         // b.step(true);
-    }
-    #[cfg(not(feature = "log"))]
-    {
-        let duration = _start_time.elapsed().as_secs_f32();
-        println!("{}", duration / (TOTAL_FRAME as f32));
     }
 }

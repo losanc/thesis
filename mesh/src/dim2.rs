@@ -58,7 +58,7 @@ pub fn plane(r: usize, c: usize, d: Option<f64>) -> Mesh<2, 3> {
     // 0   -------------
     //     0   1   2   c-1
 
-    let get_index = |r_ind: usize, c_ind: usize| -> usize { r_ind * c + c_ind };
+    let get_index = |r_ind: usize, c_ind: usize| -> usize { r_ind * r + c_ind };
 
     let verts = DVector::from_fn(2 * r * c, |i, _| {
         if i % 2 == 1 {
@@ -72,8 +72,8 @@ pub fn plane(r: usize, c: usize, d: Option<f64>) -> Mesh<2, 3> {
     let mut vert_connected_prim_indices = vec![Vec::<usize>::new(); r * c];
     prim_connected_vert_indices.reserve_exact(2 * (r - 1) * (c - 1));
     let mut count = 0;
-    for i in 0..r - 1 {
-        for j in 0..c - 1 {
+    for i in 0..c - 1 {
+        for j in 0..r - 1 {
             let v1 = get_index(i, j);
             let v2 = get_index(i, j + 1);
             let v3 = get_index(i + 1, j);
@@ -87,8 +87,8 @@ pub fn plane(r: usize, c: usize, d: Option<f64>) -> Mesh<2, 3> {
         }
     }
 
-    for i in 1..r {
-        for j in 1..c {
+    for i in 1..c {
+        for j in 1..r {
             let v1 = get_index(i, j);
             let v2 = get_index(i, j - 1);
             let v3 = get_index(i - 1, j);

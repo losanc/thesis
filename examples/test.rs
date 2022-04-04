@@ -15,7 +15,7 @@ use thesis::{
 
 const E: f64 = 1e5;
 // const NU: f64 = 0.33;
-const NU: f64 =0.0;
+const NU: f64 = 0.0;
 const MIU: f64 = E / (2.0 * (1.0 + NU));
 const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
 const DT: f64 = 0.01;
@@ -101,7 +101,7 @@ impl BouncingUpdateScenario {
         &self.mass
     }
 }
-static  mut count_static:usize =0;
+static mut count_static: usize = 0;
 impl Problem for BouncingUpdateScenario {
     type HessianType = CsrMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
@@ -127,7 +127,7 @@ impl Problem for BouncingUpdateScenario {
         // dense version of hessian matrix
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res = res + self.inertia_hessian(x);
-        let mut elastic_matrix =  self.armadillo.elastic_hessian(x, &self.energy);
+        let mut elastic_matrix = self.armadillo.elastic_hessian(x, &self.energy);
 
         let mut slice = elastic_matrix.index_mut((0..NFIXED_VERT * DIM, 0..));
         for i in slice.iter_mut() {
@@ -139,7 +139,6 @@ impl Problem for BouncingUpdateScenario {
         }
 
         res += elastic_matrix;
-
 
         unsafe {
             let data = res
@@ -154,11 +153,10 @@ impl Problem for BouncingUpdateScenario {
 
             use std::io::Write;
             file.write_all(&data).unwrap();
-            self.armadillo.save_to_obj(format!("output/matrix/mesh{count_static}.obj"));
+            self.armadillo
+                .save_to_obj(format!("output/matrix/mesh{count_static}.obj"));
             count_static += 1;
         }
-
-
 
         Some(CsrMatrix::from(&res))
 

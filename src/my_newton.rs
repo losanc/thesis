@@ -1,5 +1,4 @@
-use nalgebra::{DMatrix, DVector};
-use nalgebra_sparse::CsrMatrix;
+use nalgebra::DVector;
 use optimization::{LineSearch, LinearSolver, MatrixType, Problem, Solver};
 
 use crate::mylog;
@@ -42,50 +41,6 @@ impl<P: MyProblem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<
         input: &DVector<f64>,
         log: &mut T,
     ) -> DVector<f64> {
-        let verify = (|gradient: &DVector<f64>,
-                       active_set: &std::collections::HashSet<usize>,
-                       hessian: &P::HessianType|
-         -> f64 {
-            let size = gradient.len();
-
-            let inactiev_size = size - active_set.len();
-            let actiev_size = active_set.len();
-            let mut permuatation = DMatrix::<f64>::identity(size, size);
-            let mut max_j = size;
-            for i in 0..size {
-                if active_set.contains(&i) {
-                    for j in (i + 1..max_j).rev() {
-                        if !active_set.contains(&j) {
-                            permuatation[(i, i)] = 0.0;
-                            permuatation[(j, j)] = 0.0;
-                            permuatation[(j, i)] = 1.0;
-                            permuatation[(i, j)] = 1.0;
-                            max_j = j;
-                            break;
-                        }
-                    }
-                } else {
-                    continue;
-                }
-            }
-            let gradient = &permuatation * gradient;
-            let hessian = hessian.to_dmatrix();
-            let hessian = permuatation.transpose() * hessian * permuatation;
-            let matrix_d =
-                hessian.slice((inactiev_size, inactiev_size), (actiev_size, actiev_size));
-            let matrix_b = hessian.slice((0, inactiev_size), (inactiev_size, actiev_size));
-
-            let res = gradient.index((0..inactiev_size, 0))
-                - matrix_b
-                    * matrix_d
-                        .full_piv_lu()
-                        .solve(&gradient.index((inactiev_size.., 0)))
-                        .unwrap();
-            let norm = res.norm();
-            println!("{}", norm);
-            norm
-        });
-
         let (g, ase) = p.my_gradient(input);
         let mut g = g.unwrap();
         let mut active_set = ase.unwrap();

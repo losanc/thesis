@@ -63,7 +63,7 @@ impl<P: PreConditioner> LinearSolver for NewtonCG<P> {
         let m_inv = P::get(A);
         let mut x = DVector::<f64>::zeros(b.nrows());
         let mut r = b - A.mul(&x);
-        if r.norm() < 0.1 {
+        if r.norm() < self.tol {
             return x;
         }
         let mut z = m_inv.mul(&r);

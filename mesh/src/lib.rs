@@ -8,7 +8,6 @@ mod util;
 pub use dim2::*;
 pub use dim3::armadillo;
 pub use energy::*;
-use std::collections::HashSet;
 pub use util::*;
 
 // D = T - 1, because rust doesn't support const generic operations yet
