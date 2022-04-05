@@ -1,21 +1,23 @@
-use mesh::{plane, Mesh2d, NeoHookean2d};
+use mesh::*;
 use nalgebra::{DMatrix, DVector};
 use nalgebra_sparse::CsrMatrix;
-use optimization::{linesearch, NewtonSolver, NoLineSearch, PivLUCsr, Problem, SimpleLineSearch};
+use optimization::*;
 use thesis::{
     my_newton::MyProblem,
     scenarios::{Scenario, ScenarioProblem},
 };
 
-const E: f64 = 1e6;
-const NU: f64 = 0.33;
+const E: f64 = 1e7;
+const NU: f64 = 0.4;
 const MIU: f64 = E / (2.0 * (1.0 + NU));
 const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-const DT: f64 = 0.01;
+const DT: f64 = 1.0 / 60.0;
 const DIM: usize = 2;
-const NFIXED_VERT: usize = 10;
+const NFIXED_VERT: usize = 20;
+#[allow(non_upper_case_globals)]
+const c: usize = 80;
 const DAMP: f64 = 1.0;
-const TOTAL_FRAME: usize = 200;
+const TOTAL_FRAME: usize = 500;
 
 type EnergyType = NeoHookean2d;
 
@@ -107,7 +109,15 @@ impl ScenarioProblem for BeamScenario {
 
 impl BeamScenario {
     pub fn new(name: &str) -> Self {
-        let p = plane(NFIXED_VERT, 40, None);
+        let mut p = plane(NFIXED_VERT, c, Some(0.125), Some(0.125), None);
+
+        // init velocity
+        for i in 0..c {
+            for j in 0..NFIXED_VERT {
+                p.velos[DIM * (i * NFIXED_VERT + j)] =
+                    -1.0 * (i as f64) * (i as f64) * (i as f64 / 20.0) * 0.125 * 0.125 * 0.125;
+            }
+        }
         let mut g_vec = DVector::zeros(DIM * p.n_verts);
         for i in NFIXED_VERT..p.n_verts {
             g_vec[DIM * i] = -9.8;
@@ -136,10 +146,17 @@ fn main() {
 
     let solver = NewtonSolver {
         max_iter: 30,
-        epi: 1e-3,
+        epi: 1e-5,
     };
-    let linearsolver = PivLUCsr {};
-    let linesearch = NoLineSearch {};
+    // let linearsolver = PivLUCsr {};
+    let mut linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
+    linearsolver.tol = 1e-10;
+    // let linesearch = NoLineSearch {};
+    let linesearch = SimpleLineSearch {
+        alpha: 0.9,
+        tol: 0.01,
+        epi: 1e-7,
+    };
     let mut b = Scenario::new(problem, solver, linearsolver, linesearch);
 
     for _i in 0..TOTAL_FRAME {

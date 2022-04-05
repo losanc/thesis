@@ -45,7 +45,7 @@ fn volume_mass_construct(
     (mass, volumes, ma_invs)
 }
 
-pub fn plane(r: usize, c: usize, d: Option<f64>) -> Mesh<2, 3> {
+pub fn plane(r: usize, c: usize, w: Option<f64>, h: Option<f64>, d: Option<f64>) -> Mesh<2, 3> {
     assert!(r * c > 0);
     //  the shape of this Plane
 
@@ -59,12 +59,14 @@ pub fn plane(r: usize, c: usize, d: Option<f64>) -> Mesh<2, 3> {
     //     0   1   2   c-1
 
     let get_index = |r_ind: usize, c_ind: usize| -> usize { r_ind * r + c_ind };
+    let w = w.unwrap_or(1.0);
+    let h = h.unwrap_or(1.0);
 
     let verts = DVector::from_fn(2 * r * c, |i, _| {
         if i % 2 == 1 {
-            (((i - 1) / 2) / r) as f64
+            (((i - 1) / 2) / r) as f64 * w
         } else {
-            ((i / 2) % r) as f64
+            ((i / 2) % r) as f64 * h
         }
     });
 
