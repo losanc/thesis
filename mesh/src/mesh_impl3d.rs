@@ -189,6 +189,7 @@ impl Mesh3d {
                     *eigenvalue = 0.0;
                 }
             }
+            let small_hessian = eigendecomposition.recompose();
             for i in 0..12 {
                 for j in 0..12 {
                     res[(indices[i], indices[j])] += small_hessian[(i, j)];
