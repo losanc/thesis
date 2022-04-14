@@ -1,25 +1,27 @@
+use autodiff::Hessian;
 use mesh::*;
-use nalgebra::{DMatrix, DVector};
+use nalgebra::{DMatrix, DVector, SMatrix, SVector};
 use nalgebra_sparse::CsrMatrix;
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
 
-
-const FILENAME: &'static str = "beamold.txt";
-const COMMENT: &'static str = "original";
+const FILENAME: &'static str = "beamnew.txt";
+const COMMENT: &'static str = "modifited";
 const E: f64 = 1e7;
 const NU: f64 = 0.33;
 const MIU: f64 = E / (2.0 * (1.0 + NU));
 const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
 const DT: f64 = 1.0 / 60.0;
 const DIM: usize = 2;
+const CO_NUM: usize = DIM * (DIM + 1);
 const NFIXED_VERT: usize = 10;
 #[allow(non_upper_case_globals)]
 const c: usize = 40;
-const DAMP: f64 = 1.0;
 const SIZE: f64 = 0.25;
+const DAMP: f64 = 1.0;
 const TOTAL_FRAME: usize = 200;
 
+const ACTIVE_SET_EPI: f64 = 0.01;
 
 type EnergyType = NeoHookean2d;
 
@@ -31,6 +33,9 @@ pub struct BeamScenario {
     x_tao: DVector<f64>,
     g_vec: DVector<f64>,
     mass: DMatrix<f64>,
+    active_set: std::collections::HashSet<usize>,
+    hessian_list: Vec<SMatrix<f64, CO_NUM, CO_NUM>>,
+    init_hessian: DMatrix<f64>,
 }
 impl BeamScenario {
     fn inertia_apply(&self, x: &DVector<f64>) -> f64 {
@@ -47,8 +52,6 @@ impl BeamScenario {
         &self.mass
     }
 }
-
-static mut COUNT: usize = 0;
 impl Problem for BeamScenario {
     type HessianType = CsrMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
@@ -69,42 +72,88 @@ impl Problem for BeamScenario {
         }
         Some(res)
     }
+
     fn gradient_mut(&mut self, x: &DVector<f64>) -> Option<DVector<f64>> {
-        self.gradient(x)
-        // let mut res = DVector::<f64>::zeros(x.len());
-        // res += self.inertia_gradient(x);
-        // let mut elastic_gradient = self.beam.elastic_gradient(x, &self.energy);
-        // let mut slice = elastic_gradient.index_mut((0..NFIXED_VERT * DIM, 0));
-        // for i in slice.iter_mut() {
-        //     *i = 0.0;
-        // }
+        let res = self.gradient(x).unwrap();
+        // reset active set
+        {
+            self.active_set.clear();
+            let boundary = ACTIVE_SET_EPI * res.amax();
+            res.iter().enumerate().for_each(|(i, x)| {
+                if x.abs() > boundary {
+                    self.active_set.insert(i / DIM);
+                }
+            });
+        }
 
-        // let verclone = self.beam.verts.clone();
-        // self.beam.verts = x.clone();
-        // self.beam.accls = elastic_gradient.clone();
-        // // unsafe{
+        Some(res)
+    }
 
-        // // self.beam
-        // //     .save_to_obj(format!("output/{}shit{}.obj", self.name, COUNT));
-        // // COUNT+=1;
-        // // }
+    fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
+        // dense version of hessian matrix
+        let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
+        res = res + self.inertia_hessian(x);
+        res += self.beam.elastic_hessian(x, &self.energy);
 
-        // self.beam.verts = verclone;
-
-        // res += elastic_gradient;
-        // let mut slice = res.index_mut((0..NFIXED_VERT * DIM, 0));
-        // for i in slice.iter_mut() {
-        //     *i = 0.0;
-        // }
-
-        // Some(res)
+        let mut slice = res.index_mut((0..NFIXED_VERT * DIM, NFIXED_VERT * DIM..));
+        for i in slice.iter_mut() {
+            *i = 0.0;
+        }
+        let mut slice = res.index_mut((NFIXED_VERT * DIM.., 0..NFIXED_VERT * DIM));
+        for i in slice.iter_mut() {
+            *i = 0.0;
+        }
+        Some(CsrMatrix::from(&res))
     }
 
     fn hessian_mut(&mut self, x: &DVector<f64>) -> Option<Self::HessianType> {
         // dense version of hessian matrix
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res = res + self.inertia_hessian(x);
-        res += self.beam.elastic_hessian_projected(x, &self.energy);
+
+        let update_triangle_list = self
+            .active_set
+            .iter()
+            .map(|x| self.beam.vert_connected_prim_indices[*x].clone())
+            // .flatten()
+            // .map(|x| self.beam.prim_connected_vert_indices[x].clone())
+            // .flatten()
+            // .map(|x| self.beam.vert_connected_prim_indices[x].clone())
+            .flatten()
+            .collect::<std::collections::HashSet<usize>>();
+
+        for i in update_triangle_list {
+            let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
+            let indices = self.beam.get_indices(i);
+
+            vert_vec
+                .iter_mut()
+                .zip(indices.iter())
+                .for_each(|(g_i, i)| *g_i = x[*i]);
+            let energy: Hessian<CO_NUM> = self.beam.prim_energy(i, &self.energy, vert_vec);
+            let energy_hessian = energy.hessian();
+
+            let mut eigendecomposition = energy_hessian.symmetric_eigen();
+            for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
+                if *eigenvalue < 0.0 {
+                    *eigenvalue = 0.0;
+                }
+            }
+            let energy_hessian = eigendecomposition.recompose();
+
+            let old_energy_hessian = self.hessian_list[i];
+            let diff = energy_hessian - old_energy_hessian;
+            // update global hessian
+            for i in 0..CO_NUM {
+                for j in 0..CO_NUM {
+                    self.init_hessian[(indices[i], indices[j])] += diff[(i, j)];
+                }
+            }
+            // update the hessian list
+            self.hessian_list[i] = energy_hessian;
+        }
+
+        res += &self.init_hessian;
 
         let mut slice = res.index_mut((0..NFIXED_VERT * DIM, NFIXED_VERT * DIM..));
         for i in slice.iter_mut() {
@@ -162,7 +211,31 @@ impl BeamScenario {
 
         let mass = DMatrix::from_diagonal(&p.masss) / (DT * DT);
 
-        Self {
+        let init_hessian = p.elastic_hessian_projected(&p.verts, &energy);
+
+        let mut old_hessian_list = Vec::<SMatrix<f64, CO_NUM, CO_NUM>>::new();
+        for i in 0..p.n_prims {
+            let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
+            let indices = p.get_indices(i);
+
+            vert_vec
+                .iter_mut()
+                .zip(indices.iter())
+                .for_each(|(g_i, i)| *g_i = p.verts[*i]);
+            let energy: Hessian<CO_NUM> = p.prim_energy(i, &energy, vert_vec);
+
+            let energy_hessian = energy.hessian();
+            let mut eigendecomposition = energy_hessian.symmetric_eigen();
+            for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
+                if *eigenvalue < 0.0 {
+                    *eigenvalue = 0.0;
+                }
+            }
+            let energy_hessian = eigendecomposition.recompose();
+            old_hessian_list.push(energy_hessian);
+        }
+
+        let scenario = Self {
             dt: DT,
             energy,
             name: String::from(name),
@@ -170,12 +243,16 @@ impl BeamScenario {
             beam: p,
             x_tao: DVector::<f64>::zeros(1),
             g_vec,
-        }
+            active_set: std::collections::HashSet::<usize>::new(),
+            hessian_list: old_hessian_list,
+            init_hessian,
+        };
+        scenario
     }
 }
 
 fn main() {
-    let problem = BeamScenario::new("beam");
+    let problem = BeamScenario::new("beamnew");
 
     let solver = NewtonSolverMut {
         max_iter: 100,

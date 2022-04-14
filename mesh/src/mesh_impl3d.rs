@@ -167,4 +167,34 @@ impl Mesh3d {
         }
         res
     }
+
+    pub fn elastic_hessian_projected<E: Energy<12, 3>>(
+        &self,
+        x: &DVector<f64>,
+        energy: &E,
+    ) -> DMatrix<f64> {
+        let mut res = DMatrix::zeros(x.len(), x.len());
+        for i in 0..self.n_prims {
+            let indices = self.get_indices(i);
+            let mut vert_vec = SVector::<f64, 12>::zeros();
+            vert_vec
+                .iter_mut()
+                .zip(indices.iter())
+                .for_each(|(g_i, i)| *g_i = x[*i]);
+            let energy: Hessian<12> = self.prim_energy(i, energy, vert_vec);
+            let small_hessian = energy.hessian();
+            let mut eigendecomposition = small_hessian.symmetric_eigen();
+            for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
+                if *eigenvalue < 0.0 {
+                    *eigenvalue = 0.0;
+                }
+            }
+            for i in 0..12 {
+                for j in 0..12 {
+                    res[(indices[i], indices[j])] += small_hessian[(i, j)];
+                }
+            }
+        }
+        res
+    }
 }

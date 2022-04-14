@@ -4,11 +4,6 @@ use optimization::LineSearch;
 use optimization::LinearSolver;
 use optimization::{Problem, Solver};
 use std::io::Write;
-use std::time;
-
-use crate::my_newton::MyNewtonSolver;
-use crate::my_newton::MyProblem;
-use crate::mylog;
 
 pub trait ScenarioProblem: Problem {
     fn frame_init(&mut self);
@@ -20,7 +15,7 @@ pub trait ScenarioProblem: Problem {
 }
 
 pub struct Scenario<
-    P: ScenarioProblem + MyProblem,
+    P: ScenarioProblem,
     S: Solver<P, LSo, LSe>,
     LSo: LinearSolver<MatrixType = P::HessianType>,
     LSe: LineSearch<P>,
@@ -28,103 +23,67 @@ pub struct Scenario<
     problem: P,
     frame: usize,
     solver: S,
-    mysolver: MyNewtonSolver,
     linearsolver: LSo,
     ls: LSe,
     #[cfg(feature = "log")]
     file1: std::fs::File,
     #[cfg(not(feature = "log"))]
     file1: Vec<u8>,
-    #[cfg(feature = "log")]
-    file2: std::fs::File,
-    #[cfg(not(feature = "log"))]
-    file2: Vec<u8>,
 }
 
 impl<P, S, LSo, LSe> Scenario<P, S, LSo, LSe>
 where
-    P: ScenarioProblem + MyProblem,
+    P: ScenarioProblem,
     S: Solver<P, LSo, LSe>,
     LSo: LinearSolver<MatrixType = P::HessianType>,
     LSe: LineSearch<P>,
 {
-    pub fn new(p: P, s: S, lso: LSo, lse: LSe) -> Self {
+    pub fn new(p: P, s: S, lso: LSo, lse: LSe, filename: &str, comment: &str) -> Self {
         let mut file1;
-        let mut file2;
         #[cfg(feature = "log")]
         {
-            file1 = std::fs::File::create("new.txt").unwrap();
-            writeln!(file1, "modified newton").unwrap();
-            file2 = std::fs::File::create("old.txt").unwrap();
-            writeln!(file2, "complete newton").unwrap();
+            file1 = std::fs::File::create(filename).unwrap();
+            writeln!(file1, "{}", comment).unwrap();
         }
         #[cfg(not(feature = "log"))]
         {
             file1 = Vec::<u8>::new();
-            file2 = Vec::<u8>::new();
         }
 
         Scenario {
             problem: p,
             frame: 0,
-            mysolver: MyNewtonSolver {
-                max_iter: 30,
-                epi: s.epi(),
-            },
             solver: s,
             linearsolver: lso,
             ls: lse,
             file1,
-            file2,
         }
     }
 
-    pub fn mystep(&mut self, use_as_result: bool) {
-        mylog!(self.file1, "\n\nFrame {}", self.frame);
-
+    pub fn step(&mut self) {
         self.problem.frame_init();
         let initial_guess = self.problem.initial_guess();
-        let start = time::Instant::now();
-        let _res2 = self.mysolver.solve(
-            &self.problem,
+        // let start = std::time::Instant::now();
+        #[cfg(feature = "log")]
+        {
+            writeln!(self.file1, "\n\nFrame: {}", self.frame).unwrap();
+        }
+        let res2 = self.solver.solve(
+            &mut self.problem,
             &self.linearsolver,
             &self.ls,
             &initial_guess,
             &mut self.file1,
         );
-        let duration = start.elapsed();
-        mylog!(self.file1, "time elapsed ", duration.as_secs_f32());
-        if use_as_result {
-            self.frame += 1;
-            self.problem.set_all_vertices_vector(_res2);
-
-            #[cfg(feature = "save")]
-            self.problem.save_to_file(self.frame);
-        }
-    }
-
-    pub fn step(&mut self, use_as_result: bool) {
-        mylog!(self.file2, "\n\nFrame {}", self.frame);
-
-        self.problem.frame_init();
-        let initial_guess = self.problem.initial_guess();
-        let start = time::Instant::now();
-        let res2 = self.solver.solve(
-            &self.problem,
-            &self.linearsolver,
-            &self.ls,
-            &initial_guess,
-            &mut self.file2,
-        );
-        let duration = start.elapsed();
-        mylog!(self.file2, "time elapsed ", duration.as_secs_f32());
-        if use_as_result {
-            self.problem.set_all_vertices_vector(res2);
-
-            self.frame += 1;
-            self.problem.frame_end();
-            #[cfg(feature = "save")]
-            self.problem.save_to_file(self.frame);
-        }
+        // #[cfg(feature = "log")]
+        // {
+        //     let duration = start.elapsed();
+        //     writeln!(self.file1, "Duration: {}\n\n", duration.as_secs_f32()).unwrap();
+        // }
+        self.problem.set_all_vertices_vector(res2);
+        self.frame += 1;
+        self.problem.frame_end();
+        #[cfg(feature = "save")]
+        self.problem.save_to_file(self.frame);
     }
 }

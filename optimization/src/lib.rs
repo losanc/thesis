@@ -81,7 +81,17 @@ pub trait Problem {
     fn gradient(&self, _x: &DVector<f64>) -> Option<DVector<f64>> {
         None
     }
+    fn gradient_mut(&mut self, _x: &DVector<f64>) -> Option<DVector<f64>> {
+        None
+    }
     fn hessian(&self, _x: &DVector<f64>) -> Option<Self::HessianType> {
+        None
+    }
+    fn hessian_mut(&mut self, _x: &DVector<f64>) -> Option<Self::HessianType> {
+        None
+    }
+
+    fn hessian_inverse_mut(&mut self, _x: &DVector<f64>) -> Option<DMatrix<f64>> {
         None
     }
 }
@@ -110,7 +120,7 @@ pub trait Solver<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: L
     fn epi(&self) -> f64;
     fn solve<T: std::io::Write>(
         &self,
-        pro: &P,
+        pro: &mut P,
         lin: &L,
         ls: &LS,
         input: &DVector<f64>,

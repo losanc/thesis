@@ -25,6 +25,16 @@ impl Mesh2d {
             )
             .unwrap();
         }
+        for i in 0..self.n_verts {
+            writeln!(
+                file,
+                "vn  {}  {}  {} ",
+                self.accls[i * 2],
+                self.accls[i * 2 + 1],
+                0.0
+            )
+            .unwrap();
+        }
         writeln!(file).unwrap();
         for inds in self.prim_connected_vert_indices.iter() {
             writeln!(
@@ -115,6 +125,38 @@ impl Mesh2d {
                 .for_each(|(g_i, i)| *g_i = x[*i]);
             let energy: Hessian<6> = self.prim_energy(i, energy, vert_vec);
             let small_hessian = energy.hessian();
+            for i in 0..6 {
+                for j in 0..6 {
+                    res[(indices[i], indices[j])] += small_hessian[(i, j)];
+                }
+            }
+        }
+        res
+    }
+    pub fn elastic_hessian_projected<E: Energy<6, 2>>(
+        &self,
+        x: &DVector<f64>,
+        energy: &E,
+    ) -> DMatrix<f64> {
+        assert_eq!(x.len(), self.n_verts * 2);
+        let mut res = DMatrix::zeros(x.len(), x.len());
+        for i in 0..self.n_prims {
+            let indices = self.get_indices(i);
+            let mut vert_vec = SVector::<f64, 6>::zeros();
+            vert_vec
+                .iter_mut()
+                .zip(indices.iter())
+                .for_each(|(g_i, i)| *g_i = x[*i]);
+            let energy: Hessian<6> = self.prim_energy(i, energy, vert_vec);
+            let small_hessian = energy.hessian();
+            let mut eigendecomposition = small_hessian.symmetric_eigen();
+            for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
+                if *eigenvalue < 0.0 {
+                    *eigenvalue = 0.0;
+                }
+            }
+            let small_hessian = eigendecomposition.recompose();
+
             for i in 0..6 {
                 for j in 0..6 {
                     res[(indices[i], indices[j])] += small_hessian[(i, j)];
