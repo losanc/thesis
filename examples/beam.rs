@@ -3,25 +3,11 @@ use nalgebra::{DMatrix, DVector};
 use nalgebra_sparse::CsrMatrix;
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
+mod parameters2d;
+use parameters2d::*;
 
-
-const FILENAME: &'static str = "beamold.txt";
-const COMMENT: &'static str = "original";
-const E: f64 = 1e7;
-const NU: f64 = 0.33;
-const MIU: f64 = E / (2.0 * (1.0 + NU));
-const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-const DT: f64 = 1.0 / 60.0;
-const DIM: usize = 2;
-const NFIXED_VERT: usize = 10;
-#[allow(non_upper_case_globals)]
-const c: usize = 40;
-const DAMP: f64 = 1.0;
-const SIZE: f64 = 0.25;
-const TOTAL_FRAME: usize = 200;
-
-
-type EnergyType = NeoHookean2d;
+pub const FILENAME: &'static str = "beamold.txt";
+pub const COMMENT: &'static str = "original";
 
 pub struct BeamScenario {
     beam: Mesh2d,
@@ -48,7 +34,6 @@ impl BeamScenario {
     }
 }
 
-static mut COUNT: usize = 0;
 impl Problem for BeamScenario {
     type HessianType = CsrMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
@@ -71,33 +56,6 @@ impl Problem for BeamScenario {
     }
     fn gradient_mut(&mut self, x: &DVector<f64>) -> Option<DVector<f64>> {
         self.gradient(x)
-        // let mut res = DVector::<f64>::zeros(x.len());
-        // res += self.inertia_gradient(x);
-        // let mut elastic_gradient = self.beam.elastic_gradient(x, &self.energy);
-        // let mut slice = elastic_gradient.index_mut((0..NFIXED_VERT * DIM, 0));
-        // for i in slice.iter_mut() {
-        //     *i = 0.0;
-        // }
-
-        // let verclone = self.beam.verts.clone();
-        // self.beam.verts = x.clone();
-        // self.beam.accls = elastic_gradient.clone();
-        // // unsafe{
-
-        // // self.beam
-        // //     .save_to_obj(format!("output/{}shit{}.obj", self.name, COUNT));
-        // // COUNT+=1;
-        // // }
-
-        // self.beam.verts = verclone;
-
-        // res += elastic_gradient;
-        // let mut slice = res.index_mut((0..NFIXED_VERT * DIM, 0));
-        // for i in slice.iter_mut() {
-        //     *i = 0.0;
-        // }
-
-        // Some(res)
     }
 
     fn hessian_mut(&mut self, x: &DVector<f64>) -> Option<Self::HessianType> {
@@ -194,6 +152,6 @@ fn main() {
         println!("running frame: {}", _i);
         b.step();
     }
-    let duration =  start.elapsed().as_secs_f32();
+    let duration = start.elapsed().as_secs_f32();
     println!("time spent {duration}");
 }
