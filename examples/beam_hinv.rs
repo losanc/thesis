@@ -1,29 +1,33 @@
+use std::ops::IndexMut;
+
 use autodiff::Hessian;
 use mesh::*;
-use nalgebra::{DMatrix, DVector, SMatrix, SVector};
+use nalgebra::{ComplexField, DMatrix, DVector, SMatrix, SVector, VectorSliceMut};
 use nalgebra_sparse::{factorization::CscCholesky, CscMatrix, CsrMatrix};
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
+mod parameters2d;
+use parameters2d::*;
 
-const FILENAME: &'static str = "beamnew.txt";
-const COMMENT: &'static str = "modifited";
-const E: f64 = 1e7;
-const NU: f64 = 0.4;
-const MIU: f64 = E / (2.0 * (1.0 + NU));
-const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-const DT: f64 = 1.0 / 60.0;
-const DIM: usize = 2;
-const CO_NUM: usize = DIM * (DIM + 1);
+const FILENAME: &'static str = "beaminv.txt";
+const COMMENT: &'static str = "inverse hessian";
+// const E: f64 = 1e5;
+// const NU: f64 = 0.4;
+// const MIU: f64 = E / (2.0 * (1.0 + NU));
+// const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
+// const DT: f64 = 1.0 / 60.0;
+// const DIM: usize = 2;
+// const CO_NUM: usize = DIM * (DIM + 1);
 
-const NFIXED_VERT: usize = 20;
-#[allow(non_upper_case_globals)]
-const c: usize = 80;
-const DAMP: f64 = 1.0;
-const TOTAL_FRAME: usize = 500;
+// const NFIXED_VERT: usize = 2;
+// #[allow(non_upper_case_globals)]
+// const c: usize = 8;
+// const DAMP: f64 = 1.0;
+// const TOTAL_FRAME: usize = 300;
 
 const ACTIVE_SET_EPI: f64 = 0.01;
 
-type EnergyType = NeoHookean2d;
+// type EnergyType = NeoHookean2d;
 
 pub struct BeamScenario {
     beam: Mesh2d,
@@ -35,8 +39,43 @@ pub struct BeamScenario {
     mass: DMatrix<f64>,
     active_set: std::collections::HashSet<usize>,
     hessian_list: Vec<SMatrix<f64, CO_NUM, CO_NUM>>,
-    hessian_inverse: DMatrix<f64>,
+    hessian: CscMatrix<f64>,
+    hessian_cholesky: CscCholesky<f64>,
 }
+
+fn update(old_l: &mut DMatrix<f64>, x_vec: &DVector<f64>, update_flat: bool) {
+    let mut vec_copy = x_vec.clone();
+    for i in 0..old_l.ncols() {
+        let r;
+        if update_flat {
+            r = (old_l[(i, i)] * old_l[(i, i)] + vec_copy[i] * vec_copy[i]).sqrt();
+        } else {
+            r = (old_l[(i, i)] * old_l[(i, i)] - vec_copy[i] * vec_copy[i]).sqrt();
+        }
+        let other_c = r / old_l[(i, i)];
+        let s = vec_copy[i] / old_l[(i, i)];
+        old_l[(i, i)] = r;
+
+        let n = old_l.ncols();
+        if i < n - 1 {
+            let mut lslice = old_l.index_mut((i + 1..n, i));
+            if update_flat {
+                lslice += s * vec_copy.index((i + 1..n, 0));
+            } else {
+                lslice -= s * vec_copy.index((i + 1..n, 0));
+            }
+
+            lslice /= other_c;
+
+            let mut xslice = vec_copy.index_mut((i + 1..n, 0));
+            // println!("xslice before {xslice}");
+            xslice *= other_c;
+            xslice -= s * lslice;
+            // println!("xslice after {xslice}");
+        }
+    }
+}
+
 impl BeamScenario {
     fn inertia_apply(&self, x: &DVector<f64>) -> f64 {
         let temp = x - &self.x_tao - &self.g_vec * (self.dt * self.dt);
@@ -50,6 +89,149 @@ impl BeamScenario {
     fn inertia_hessian<'a>(&'a self, _x: &DVector<f64>) -> &'a DMatrix<f64> {
         // self.mass has already been divided by dt*dt when constructing it
         &self.mass
+    }
+
+    fn something(&self, x: &DVector<f64>) -> DMatrix<f64> {
+        let dense = DMatrix::from(&self.hessian);
+        let chol_dense = dense.cholesky().unwrap();
+        let mut l = chol_dense.l();
+        for i in 0..self.beam.n_prims {
+            let indices = self.beam.get_indices(i);
+            let mut vert_vec = SVector::<f64, 6>::zeros();
+            vert_vec
+                .iter_mut()
+                .zip(indices.iter())
+                .for_each(|(g_i, i)| *g_i = x[*i]);
+
+            let small_hessian = self.beam.prim_projected_hessian(i, &self.energy, vert_vec);
+            let diff = &small_hessian - self.hessian_list[i];
+            let mut eigendecomposition = diff.symmetric_eigen();
+
+            for j in 0..CO_NUM {
+                let eigen_value = eigendecomposition.eigenvalues[j];
+                if eigen_value.abs() < 1e-5 {
+                    continue;
+                }
+
+                let update_flag;
+                let mut vector = eigendecomposition.eigenvectors.column_mut(j);
+
+                if eigen_value > 0.0 {
+                    update_flag = true;
+                    vector *= eigen_value.sqrt();
+                } else {
+                    update_flag = false;
+                    vector *= (-eigen_value).sqrt();
+                }
+
+                let mut x_vec = DVector::<f64>::zeros(x.len());
+
+                x_vec[indices[0]] = vector[0];
+                x_vec[indices[1]] = vector[1];
+                x_vec[indices[2]] = vector[2];
+                x_vec[indices[3]] = vector[3];
+                x_vec[indices[4]] = vector[4];
+                x_vec[indices[5]] = vector[5];
+                update(&mut l, &x_vec, update_flag);
+            }
+        }
+        l
+    }
+
+    fn something_sparse(&self, x: &DVector<f64>) -> CscMatrix<f64> {
+        let mut l = self.hessian_cholesky.l().clone();
+        for i in 0..self.beam.n_prims {
+            let indices = self.beam.get_indices(i);
+
+            let mut vert_vec = SVector::<f64, 6>::zeros();
+            vert_vec
+                .iter_mut()
+                .zip(indices.iter())
+                .for_each(|(g_i, i)| *g_i = x[*i]);
+
+            let small_hessian = self.beam.prim_projected_hessian(i, &self.energy, vert_vec);
+            let diff = small_hessian - self.hessian_list[i];
+
+            let mut eigendecomposition = diff.symmetric_eigen();
+            // println!("{}", eigendecomposition.eigenvalues);
+            for j in 0..CO_NUM {
+                let eigen_value = eigendecomposition.eigenvalues[j];
+                if eigen_value.abs() < 1e-5 {
+                    continue;
+                }
+
+                let update_flag;
+                let mut vector = eigendecomposition.eigenvectors.column_mut(j);
+
+                if eigen_value > 0.0 {
+                    update_flag = true;
+                    vector *= eigen_value.sqrt();
+                } else {
+                    update_flag = false;
+                    vector *= (-eigen_value).sqrt();
+                }
+                // println!("{eigen_value}   {update_flag}");
+                let (col_offsets, row_indices, values) = l.csc_data_mut();
+                let n = col_offsets.len() - 1;
+
+                let mut x_vec = DVector::<f64>::zeros(n);
+                if indices[0] >= DIM * NFIXED_VERT {
+                    x_vec[indices[0]] = vector[0];
+                }
+                if indices[1] >= DIM * NFIXED_VERT {
+                    x_vec[indices[1]] = vector[1];
+                }
+                if indices[2] >= DIM * NFIXED_VERT {
+                    x_vec[indices[2]] = vector[2];
+                }
+                if indices[3] >= DIM * NFIXED_VERT {
+                    x_vec[indices[3]] = vector[3];
+                }
+                if indices[4] >= DIM * NFIXED_VERT {
+                    x_vec[indices[4]] = vector[4];
+                }
+                if indices[5] >= DIM * NFIXED_VERT {
+                    x_vec[indices[5]] = vector[5];
+                }
+
+                for k in 0..n {
+                    let lkk = values.index_mut(col_offsets[k]);
+                    let xk = x_vec[k];
+                    if xk.abs() < 1e-5 {
+                        continue;
+                    }
+                    let lkkv = *lkk;
+                    let r;
+                    if update_flag {
+                        r = lkkv * lkkv + xk * xk;
+                    } else {
+                        r = lkkv * lkkv - xk * xk;
+                    }
+                    if r < 0.0 {
+                        panic!("{}  {} cao!", k, r);
+                    }
+                    let r = r.sqrt();
+                    let other_c = r / lkkv;
+                    let s = xk / lkkv;
+                    *lkk = r;
+
+                    for m in col_offsets[k] + 1..col_offsets[k + 1] {
+                        // println!("{m}");
+                        let r_index = row_indices[m];
+                        let v = values.index_mut(m);
+                        let x_r_index = x_vec.index_mut(r_index);
+                        if update_flag {
+                            *v = (*v + s * *x_r_index) / other_c;
+                        } else {
+                            *v = (*v - s * *x_r_index) / other_c;
+                        }
+                        *x_r_index *= other_c;
+                        *x_r_index -= s * *v;
+                    }
+                }
+            }
+        }
+        l
     }
 }
 impl Problem for BeamScenario {
@@ -105,80 +287,49 @@ impl Problem for BeamScenario {
         }
         Some(CsrMatrix::from(&res))
     }
-    fn hessian_inverse_mut(&mut self, x: &DVector<f64>) -> Option<DMatrix<f64>> {
-        let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
-        res = res + self.inertia_hessian(x);
+    fn hessian_inverse_mut(&mut self, x: &DVector<f64>) -> CscMatrix<f64> {
+        let l2 = self.something_sparse(x);
 
-        let update_triangle_list = self
-            .active_set
-            .iter()
-            .map(|x| self.beam.vert_connected_prim_indices[*x].clone())
-            // .flatten()
-            // .map(|x| self.beam.prim_connected_vert_indices[x].clone())
-            // .flatten()
-            // .map(|x| self.beam.vert_connected_prim_indices[x].clone())
-            .flatten()
-            .collect::<std::collections::HashSet<usize>>();
-        for i in update_triangle_list {
-            println!("?");
-            let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
+        for i in 0..self.beam.n_prims {
             let indices = self.beam.get_indices(i);
-
+            let mut vert_vec = SVector::<f64, 6>::zeros();
             vert_vec
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = x[*i]);
-            let energy: Hessian<CO_NUM> = self.beam.prim_energy(i, &self.energy, vert_vec);
-            let energy_hessian = energy.hessian();
-            let old_energy_hessian = self.hessian_list[i];
-
-            // rank 4 matrix
-            let diff = energy_hessian - old_energy_hessian;
-
-            let decom = diff.symmetric_eigen();
-            let eigenvalues = decom.eigenvalues;
-
-            let eigenvectors = decom.eigenvectors;
-            // TODO: hard-coded 4x4 matrix
-            let C_inv = SMatrix::<f64, 4, 4>::from_diagonal(&SVector::<f64, 4>::new(
-                1.0 / eigenvalues[0],
-                1.0 / eigenvalues[1],
-                1.0 / eigenvalues[2],
-                1.0 / eigenvalues[3],
-            ));
-
-            let U = eigenvectors.fixed_columns::<4>(0);
-            //  diff = &U * &C * U.transpose()
-
-            let middle = C_inv + U.transpose() * &self.hessian_inverse * U;
-
-            let middle_inv = middle.try_inverse().unwrap();
-
-            self.hessian_inverse -=
-                &self.hessian_inverse * &U * middle_inv * U.transpose() * &self.hessian_inverse;
-
-            // update the hessian list
-            self.hessian_list[i] = energy_hessian;
+            let small_hessian = self.beam.prim_projected_hessian(i, &self.energy, vert_vec);
+            let diff = &small_hessian - self.hessian_list[i];
+            for m in 0..CO_NUM {
+                for n in 0..CO_NUM {
+                    let sparse_entry = self.hessian.get_entry_mut(indices[m], indices[n]).unwrap();
+                    match sparse_entry {
+                        nalgebra_sparse::SparseEntryMut::NonZero(v) => *v += diff[(m, n)],
+                        nalgebra_sparse::SparseEntryMut::Zero => todo!(),
+                    }
+                }
+            }
+            self.hessian_list[i] = small_hessian;
         }
+        // let mut self_hessian_clone = self.hessian.clone();
 
-        // res += &self.init_hessian;
+        for (i, j, k) in self.hessian.triplet_iter_mut() {
+            if (i < DIM * NFIXED_VERT || j < DIM * NFIXED_VERT) && (i != j) {
+                *k = 0.0;
+            }
+        }
+        self.hessian_cholesky = CscCholesky::factor(&self.hessian).unwrap();
+        // let res = CscCholesky::factor(&self.hessian).unwrap().l().clone();
+        // println!("{:.3}",DMatrix::from(&res));
 
-        // let mut slice = res.index_mut((0..NFIXED_VERT * DIM, NFIXED_VERT * DIM..));
-        // for i in slice.iter_mut() {
-        //     *i = 0.0;
-        // }
-        // let mut slice = res.index_mut((NFIXED_VERT * DIM.., 0..NFIXED_VERT * DIM));
-        // for i in slice.iter_mut() {
-        //     *i = 0.0;
-        // }
-        // Some(CsrMatrix::from(&res))
-        let hessian = self.hessian(x).unwrap();
-        let hessian = CscMatrix::from(&hessian);
-        let solver = nalgebra_sparse::factorization::CscCholesky::factor(&hessian);
-        let hessian_inverse = solver
-            .unwrap()
-            .solve(&DMatrix::<f64>::identity(x.len(), x.len()));
-        Some(hessian_inverse)
+        // CscCholesky::factor(&self_hessian_clone).unwrap()
+        // res
+
+        // println!(
+        //     "real {:.2}",
+        //     DMatrix::from(&res)
+        // );
+
+        l2
     }
 }
 
@@ -205,13 +356,13 @@ impl ScenarioProblem for BeamScenario {
 
 impl BeamScenario {
     pub fn new(name: &str) -> Self {
-        let mut p = plane(NFIXED_VERT, c, Some(0.125), Some(0.125), None);
+        let mut p = plane(NFIXED_VERT, c, Some(SIZE), Some(SIZE), None);
 
         // init velocity
         for i in 0..c {
             for j in 0..NFIXED_VERT {
                 p.velos[DIM * (i * NFIXED_VERT + j)] =
-                    -1.0 * (i as f64) * (i as f64) * (i as f64 / 20.0) * 0.125 * 0.125 * 0.125;
+                    -1.0 * (i as f64) * (i as f64) * (i as f64 / 20.0) * SIZE * SIZE * SIZE;
             }
         }
 
@@ -225,15 +376,16 @@ impl BeamScenario {
         };
 
         let mass = DMatrix::from_diagonal(&p.masss) / (DT * DT);
+        let elastic_psd_hessian = p.elastic_hessian_projected(&p.verts, &energy);
 
-        let init_hessian = p.elastic_hessian(&p.verts, &energy);
+        let mut init_hessian = CscMatrix::from(&elastic_psd_hessian) + CscMatrix::from(&mass);
+        for (i, j, k) in init_hessian.triplet_iter_mut() {
+            if (i < DIM * NFIXED_VERT || j < DIM * NFIXED_VERT) && (i != j) {
+                *k = 0.0;
+            }
+        }
 
-        let hessian_inverse = init_hessian + &mass;
-        let hessian_inverse = CscMatrix::<f64>::from(&hessian_inverse);
-        let solver = nalgebra_sparse::factorization::CscCholesky::factor(&hessian_inverse);
-        let hessian_inverse = solver
-            .unwrap()
-            .solve(&DMatrix::<f64>::identity(p.n_verts * DIM, p.n_verts * DIM));
+        let cholesky = CscCholesky::factor(&init_hessian).unwrap();
 
         let mut old_hessian_list = Vec::<SMatrix<f64, CO_NUM, CO_NUM>>::new();
         for i in 0..p.n_prims {
@@ -244,10 +396,9 @@ impl BeamScenario {
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = p.verts[*i]);
-            let energy: Hessian<CO_NUM> = p.prim_energy(i, &energy, vert_vec);
-            old_hessian_list.push(energy.hessian());
 
-            // old_hessian_list.push(SMatrix::<f64,6,6>::zeros());
+            let small_hessian = p.prim_projected_hessian(i, &energy, vert_vec);
+            old_hessian_list.push(small_hessian);
         }
 
         let scenario = Self {
@@ -260,17 +411,18 @@ impl BeamScenario {
             g_vec,
             active_set: std::collections::HashSet::<usize>::new(),
             hessian_list: old_hessian_list,
-            hessian_inverse,
+            hessian_cholesky: cholesky,
+            hessian: init_hessian,
         };
         scenario
     }
 }
 
 fn main() {
-    let problem = BeamScenario::new("beam");
+    let problem = BeamScenario::new("beam_hinv");
 
     let solver = NewtonInverseSolver {
-        max_iter: 30,
+        max_iter: 100,
         epi: 1e-5,
     };
     let mut linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();

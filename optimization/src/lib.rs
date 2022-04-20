@@ -91,9 +91,11 @@ pub trait Problem {
         None
     }
 
-    fn hessian_inverse_mut(&mut self, _x: &DVector<f64>) -> Option<DMatrix<f64>> {
-        None
-    }
+    fn hessian_inverse_mut<'a>(
+        &'a mut self,
+        _x: &DVector<f64>,
+        // ) -> nalgebra_sparse::factorization::CscCholesky<f64>;
+    ) -> CscMatrix<f64>;
 }
 
 pub mod linearsolver;

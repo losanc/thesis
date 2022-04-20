@@ -1,6 +1,6 @@
 use mesh::*;
 use nalgebra::{DMatrix, DVector};
-use nalgebra_sparse::CsrMatrix;
+use nalgebra_sparse::{CsrMatrix, CscMatrix};
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
 mod parameters2d;
@@ -73,6 +73,13 @@ impl Problem for BeamScenario {
             *i = 0.0;
         }
         Some(CsrMatrix::from(&res))
+    }
+
+    fn hessian_inverse_mut<'a>(
+        &'a mut self,
+        _x: &DVector<f64>,
+    ) -> CscMatrix<f64> {
+        todo!()
     }
 }
 

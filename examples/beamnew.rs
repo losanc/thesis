@@ -4,26 +4,26 @@ use nalgebra::{DMatrix, DVector, SMatrix, SVector};
 use nalgebra_sparse::CsrMatrix;
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
+mod parameters2d;
+use parameters2d::*;
 
 const FILENAME: &'static str = "beamnew.txt";
 const COMMENT: &'static str = "modifited";
-const E: f64 = 1e7;
-const NU: f64 = 0.33;
-const MIU: f64 = E / (2.0 * (1.0 + NU));
-const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-const DT: f64 = 1.0 / 60.0;
-const DIM: usize = 2;
-const CO_NUM: usize = DIM * (DIM + 1);
-const NFIXED_VERT: usize = 10;
-#[allow(non_upper_case_globals)]
-const c: usize = 40;
-const SIZE: f64 = 0.25;
-const DAMP: f64 = 1.0;
-const TOTAL_FRAME: usize = 200;
+// const E: f64 = 1e7;
+// const NU: f64 = 0.33;
+// const MIU: f64 = E / (2.0 * (1.0 + NU));
+// const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
+// const DT: f64 = 1.0 / 60.0;
+// const DIM: usize = 2;
+
+// const NFIXED_VERT: usize = 10;
+// #[allow(non_upper_case_globals)]
+// const c: usize = 40;
+// const SIZE: f64 = 0.25;
+// const DAMP: f64 = 1.0;
+// const TOTAL_FRAME: usize = 200;
 
 const ACTIVE_SET_EPI: f64 = 0.01;
-
-type EnergyType = NeoHookean2d;
 
 pub struct BeamScenario {
     beam: Mesh2d,
@@ -164,6 +164,13 @@ impl Problem for BeamScenario {
             *i = 0.0;
         }
         Some(CsrMatrix::from(&res))
+    }
+
+    fn hessian_inverse_mut<'a>(
+        &'a mut self,
+        _x: &DVector<f64>,
+    ) -> nalgebra_sparse::factorization::CscCholesky<f64> {
+        todo!()
     }
 }
 

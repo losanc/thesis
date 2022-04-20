@@ -1,5 +1,3 @@
-#![no_main]
-
 use mesh::NeoHookean2d;
 
 pub const E: f64 = 1e7;
@@ -13,5 +11,6 @@ pub const NFIXED_VERT: usize = 10;
 pub const c: usize = 40;
 pub const DAMP: f64 = 1.0;
 pub const SIZE: f64 = 0.25;
-pub const TOTAL_FRAME: usize = 200;
+pub const TOTAL_FRAME: usize = 30;
 pub type EnergyType = NeoHookean2d;
+pub const CO_NUM: usize = DIM * (DIM + 1);

@@ -3,6 +3,7 @@ use autodiff::Hessian;
 use autodiff::MyScalar;
 use nalgebra::DMatrix;
 use nalgebra::DVector;
+use nalgebra::SMatrix;
 use nalgebra::SVector;
 use std::fs::File;
 use std::io::Write;
@@ -63,6 +64,24 @@ impl Mesh2d {
         let square = self.volumes[index];
         let ene = energy.energy(vert_gradient_vec, inv_mat, square);
         ene
+    }
+
+    pub fn prim_projected_hessian<E: Energy<6, 2>>(
+        &self,
+        i: usize,
+        energy: &E,
+        vert_vec: SVector<f64, 6>,
+    ) -> SMatrix<f64, 6, 6> {
+        let energy: Hessian<6> = self.prim_energy(i, energy, vert_vec);
+        let small_hessian = energy.hessian();
+        let mut eigendecomposition = small_hessian.symmetric_eigen();
+        for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
+            if *eigenvalue < 0.0 {
+                *eigenvalue = 0.0;
+            }
+        }
+        let small_hessian = eigendecomposition.recompose();
+        small_hessian
     }
 
     pub fn get_indices(&self, i: usize) -> [usize; 6] {
@@ -147,16 +166,7 @@ impl Mesh2d {
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = x[*i]);
-            let energy: Hessian<6> = self.prim_energy(i, energy, vert_vec);
-            let small_hessian = energy.hessian();
-            let mut eigendecomposition = small_hessian.symmetric_eigen();
-            for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
-                if *eigenvalue < 0.0 {
-                    *eigenvalue = 0.0;
-                }
-            }
-            let small_hessian = eigendecomposition.recompose();
-
+            let small_hessian = self.prim_projected_hessian(i, energy, vert_vec);
             for i in 0..6 {
                 for j in 0..6 {
                     res[(indices[i], indices[j])] += small_hessian[(i, j)];
