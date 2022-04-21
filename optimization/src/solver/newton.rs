@@ -53,7 +53,7 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
             res -= &delta;
             g = p.gradient(&res).unwrap();
             if count > self.max_iter {
-                break;
+                panic!("max newtons steps");
             }
             new_value = p.apply(&res);
             mylog!(log, "delta length", delta.norm());
@@ -112,7 +112,7 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
             res -= &delta;
             g = p.gradient_mut(&res).unwrap();
             if count > self.max_iter {
-                break;
+                panic!("max newtons steps");
             }
             new_value = p.apply(&res);
             mylog!(log, "delta length", delta.norm());
@@ -169,7 +169,7 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
             res -= &delta;
             g = p.gradient_mut(&res).unwrap();
             if count > self.max_iter {
-                break;
+                panic!("max newtons steps");
             }
             new_value = p.apply(&res);
             mylog!(log, "delta length", delta.norm());

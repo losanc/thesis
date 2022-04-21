@@ -70,7 +70,6 @@ impl Problem for BeamScenario {
                 }
             });
         }
-
         Some(res)
     }
 
@@ -125,10 +124,10 @@ impl Problem for BeamScenario {
                 let mut vector = eigendecomposition.eigenvectors.column_mut(j);
 
                 if eigen_value > 0.0 {
-                    update_flag = true;
+                    update_flag = 1.0;
                     vector *= eigen_value.sqrt();
                 } else {
-                    update_flag = false;
+                    update_flag = -1.0;
                     vector *= (-eigen_value).sqrt();
                 }
                 let (col_offsets, row_indices, values) = l.csc_data_mut();
@@ -147,17 +146,12 @@ impl Problem for BeamScenario {
                 unsafe {
                     for k in 0..n {
                         let xk = x_vec.get_unchecked(k);
-                        if xk.abs() < 1e-5 {
+                        if xk.abs() < 1e-6 {
                             continue;
                         }
                         let lkk = values.get_unchecked_mut(*col_offsets.get_unchecked(k));
                         let lkkv = *lkk;
-                        let r;
-                        if update_flag {
-                            r = lkkv * lkkv + xk * xk;
-                        } else {
-                            r = lkkv * lkkv - xk * xk;
-                        }
+                        let r = lkkv*lkkv +update_flag*xk*xk;
                         assert!(r > 0.0);
                         let r = r.sqrt();
                         let other_c = r / lkkv;
@@ -170,11 +164,7 @@ impl Problem for BeamScenario {
                             let r_index = *row_indices.get_unchecked(m);
                             let v = values.get_unchecked_mut(m);
                             let x_r_index = x_vec.get_unchecked_mut(r_index);
-                            if update_flag {
-                                *v = (*v + s * *x_r_index) / other_c;
-                            } else {
-                                *v = (*v - s * *x_r_index) / other_c;
-                            }
+                            *v = (*v + update_flag* s * *x_r_index) / other_c;
                             *x_r_index *= other_c;
                             *x_r_index -= s * *v;
                         }
@@ -275,8 +265,8 @@ fn main() {
     let problem = BeamScenario::new("beam_hinv");
 
     let solver = NewtonInverseSolver {
-        max_iter: 100,
-        epi: 1e-5,
+        max_iter: 500,
+        epi: 1e-3,
     };
     let mut linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
     linearsolver.tol = 1e-10;

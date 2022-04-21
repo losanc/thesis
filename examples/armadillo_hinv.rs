@@ -1,13 +1,13 @@
 use autodiff::Hessian;
 use mesh::{armadillo, Mesh3d};
 use nalgebra::{DMatrix, DVector, SMatrix, SVector};
-use nalgebra_sparse::CsrMatrix;
+use nalgebra_sparse::{CsrMatrix, CscMatrix, factorization::CscCholesky};
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
 mod armadillopara;
 use armadillopara::*;
-const FILENAME: &'static str = "armadillo_projected_fast.txt";
-const COMMENT: &'static str = "naive projected newton";
+const FILENAME: &'static str = "armadillo_chol_inv.txt";
+const COMMENT: &'static str = "newton with chol";
 
 
 pub struct BouncingUpdateScenario {
@@ -21,7 +21,7 @@ pub struct BouncingUpdateScenario {
 
     active_set: std::collections::HashSet<usize>,
     hessian_list: Vec<SMatrix<f64, CO_NUM, CO_NUM>>,
-    init_hessian: DMatrix<f64>,
+    l_matrix: CscMatrix<f64>,
 }
 impl BouncingUpdateScenario {
     fn inertia_apply(&self, x: &DVector<f64>) -> f64 {
@@ -61,7 +61,6 @@ impl Problem for BouncingUpdateScenario {
 
     fn gradient_mut(&mut self, x: &DVector<f64>) -> Option<DVector<f64>> {
         let res = self.gradient(x).unwrap();
-
         // reset active set
         {
             self.active_set.clear();
@@ -75,84 +74,100 @@ impl Problem for BouncingUpdateScenario {
         Some(res)
     }
 
-    // fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
-    //     // dense version of hessian matrix
-    //     let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
-    //     res = res + self.inertia_hessian(x);
-    //     res += self.armadillo.elastic_hessian_projected(x, &self.energy);
-
-    //     let mut slice = res.index_mut((0..NFIXED_VERT * DIM, NFIXED_VERT * DIM..));
-    //     for i in slice.iter_mut() {
-    //         *i = 0.0;
-    //     }
-    //     let mut slice = res.index_mut((NFIXED_VERT * DIM.., 0..NFIXED_VERT * DIM));
-    //     for i in slice.iter_mut() {
-    //         *i = 0.0;
-    //     }
-    //     Some(CsrMatrix::from(&res))
-    // }
-
-    fn hessian_mut(&mut self, x: &DVector<f64>) -> Option<Self::HessianType> {
-        // dense version of hessian matrix
-
+    fn hessian_inverse_mut<'a>(
+        &'a mut self,
+        x: &DVector<f64>,
+    ) -> &'a nalgebra_sparse::CscMatrix<f64> {
         let update_triangle_list = self
             .active_set
             .iter()
             .map(|x| self.armadillo.vert_connected_prim_indices[*x].clone())
-            // .flatten()
-            // .map(|x| self.beam.prim_connected_vert_indices[x].clone())
-            // .flatten()
-            // .map(|x| self.beam.vert_connected_prim_indices[x].clone())
             .flatten()
             .collect::<std::collections::HashSet<usize>>();
 
+        let l = &mut self.l_matrix;
+        println!("{}  {}",update_triangle_list.len(),self.armadillo.n_prims);
+
         for i in update_triangle_list {
-            let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
             let indices = self.armadillo.get_indices(i);
 
+            let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
             vert_vec
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = x[*i]);
-            let energy: Hessian<CO_NUM> = self.armadillo.prim_energy(i, &self.energy, vert_vec);
-            let energy_hessian = energy.hessian();
 
-            let mut eigendecomposition = energy_hessian.symmetric_eigen();
-            for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
-                if *eigenvalue < 0.0 {
-                    *eigenvalue = 0.0;
+            let small_hessian = self.armadillo.prim_projected_hessian(i, &self.energy, vert_vec);
+            let diff = small_hessian - self.hessian_list[i];
+
+            let mut eigendecomposition = diff.symmetric_eigen();
+
+            for j in 0..CO_NUM {
+                let eigen_value = eigendecomposition.eigenvalues[j];
+                if eigen_value.abs() < 1e-5 {
+                    continue;
+                }
+
+                let update_flag;
+                let mut vector = eigendecomposition.eigenvectors.column_mut(j);
+
+                if eigen_value > 0.0 {
+                    update_flag = 1.0;
+                    vector *= eigen_value.sqrt();
+                } else {
+                    update_flag = -1.0;
+                    vector *= (-eigen_value).sqrt();
+                }
+                let (col_offsets, row_indices, values) = l.csc_data_mut();
+                let n = col_offsets.len() - 1;
+
+                let mut x_vec = DVector::<f64>::zeros(n);
+                x_vec[indices[0]] = vector[0];
+                x_vec[indices[1]] = vector[1];
+                x_vec[indices[2]] = vector[2];
+                x_vec[indices[3]] = vector[3];
+                x_vec[indices[4]] = vector[4];
+                x_vec[indices[5]] = vector[5];
+                x_vec[indices[6]] = vector[6];
+                x_vec[indices[7]] = vector[7];
+                x_vec[indices[8]] = vector[8];
+                x_vec[indices[9]] = vector[9];
+                x_vec[indices[10]] = vector[10];
+                x_vec[indices[11]] = vector[11];
+
+                x_vec.index_mut((0..DIM * NFIXED_VERT, 0)).fill(0.0);
+
+                unsafe {
+                    for k in 0..n {
+                        let xk = x_vec.get_unchecked(k);
+                        if xk.abs() < 1e-6 {
+                            continue;
+                        }
+                        let lkk = values.get_unchecked_mut(*col_offsets.get_unchecked(k));
+                        let lkkv = *lkk;
+                        let r = lkkv*lkkv +update_flag*xk*xk;
+                        assert!(r > 0.0);
+                        let r = r.sqrt();
+                        let other_c = r / lkkv;
+                        let s = xk / lkkv;
+                        *lkk = r;
+
+                        // possible for simd optimization
+                        for m in col_offsets.get_unchecked(k) + 1..*col_offsets.get_unchecked(k + 1)
+                        {
+                            let r_index = *row_indices.get_unchecked(m);
+                            let v = values.get_unchecked_mut(m);
+                            let x_r_index = x_vec.get_unchecked_mut(r_index);
+                            *v = (*v + update_flag* s * *x_r_index) / other_c;
+                            *x_r_index *= other_c;
+                            *x_r_index -= s * *v;
+                        }
+                    }
                 }
             }
-            let energy_hessian = eigendecomposition.recompose();
-
-            let old_energy_hessian = self.hessian_list[i];
-            let diff = energy_hessian - old_energy_hessian;
-            // update global hessian
-            for i in 0..CO_NUM {
-                for j in 0..CO_NUM {
-                    self.init_hessian[(indices[i], indices[j])] += diff[(i, j)];
-                }
-            }
-            // update the hessian list
-            self.hessian_list[i] = energy_hessian;
+            self.hessian_list[i] = small_hessian;
         }
-
-        // res += &self.init_hessian;
-        let mut sparse = CsrMatrix::from(&self.init_hessian);
-        for (i, j, k) in sparse.triplet_iter_mut() {
-            if i < NFIXED_VERT * DIM || j < NFIXED_VERT * DIM {
-                *k = 0.0;
-            }
-        }
-
-        Some(self.inertia_hessian(x) + sparse)
-    }
-
-    fn hessian_inverse_mut<'a>(
-        &'a mut self,
-        _x: &DVector<f64>,
-    ) -> &'a nalgebra_sparse::CscMatrix<f64> {
-        todo!()
+        &self.l_matrix
     }
 }
 
@@ -191,7 +206,17 @@ impl BouncingUpdateScenario {
 
         let mass = DMatrix::from_diagonal(&p.masss) / (DT * DT);
 
-        let init_hessian = p.elastic_hessian_projected(&p.verts, &energy);
+        let elastic_psd_hessian = p.elastic_hessian_projected(&p.verts, &energy);
+
+        let mut init_hessian = CscMatrix::from(&elastic_psd_hessian) + CscMatrix::from(&mass);
+
+        for (i, j, k) in init_hessian.triplet_iter_mut() {
+            if (i < DIM * NFIXED_VERT || j < DIM * NFIXED_VERT) && (i != j) {
+                *k = 0.0;
+            }
+        }
+
+        let l_matrix = CscCholesky::factor(&init_hessian).unwrap().l().clone();
 
         let mut old_hessian_list = Vec::<SMatrix<f64, CO_NUM, CO_NUM>>::new();
         for i in 0..p.n_prims {
@@ -225,9 +250,9 @@ impl BouncingUpdateScenario {
             x_tao: DVector::<f64>::zeros(1),
             g_vec,
 
-            init_hessian,
             active_set: std::collections::HashSet::<usize>::new(),
             hessian_list: old_hessian_list,
+            l_matrix,
         }
     }
 }
@@ -235,7 +260,7 @@ impl BouncingUpdateScenario {
 fn main() {
     let problem = BouncingUpdateScenario::new("armadillotru");
 
-    let solver = NewtonSolverMut {
+    let solver = NewtonInverseSolver {
         max_iter: 300,
         epi: 1e-3,
     };

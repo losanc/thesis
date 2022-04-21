@@ -140,8 +140,8 @@ fn main() {
     let problem = BeamScenario::new("beam");
 
     let solver = NewtonSolverMut {
-        max_iter: 100,
-        epi: 1e-5,
+        max_iter: 500,
+        epi: 1e-3,
     };
     // let mut linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
     let linearsolver = CscCholeskySolver {};

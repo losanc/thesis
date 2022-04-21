@@ -10,8 +10,17 @@ pub const NFIXED_VERT: usize = 20;
 #[allow(non_upper_case_globals)]
 pub const c: usize = 80;
 pub const DAMP: f64 = 1.0;
-pub const SIZE: f64 = 0.25;
-pub const TOTAL_FRAME: usize = 30;
+pub const SIZE: f64 = 0.125;
+pub const TOTAL_FRAME: usize = 100;
 pub type EnergyType = NeoHookean2d;
+
+#[allow(dead_code)]
 pub const CO_NUM: usize = DIM * (DIM + 1);
-pub const ACTIVE_SET_EPI: f64 = 0.01;
+
+#[allow(dead_code)]
+pub const ACTIVE_SET_EPI: f64 = 0.7;
+
+#[allow(dead_code)]
+fn  main(){
+
+}

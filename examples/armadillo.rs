@@ -1,22 +1,12 @@
-use mesh::{armadillo, Mesh3d, NeoHookean3d};
+use mesh::{armadillo, Mesh3d};
 use nalgebra::{DMatrix, DVector};
 use nalgebra_sparse::CsrMatrix;
 use optimization::{JacobianPre, LinearSolver, NewtonCG, NewtonSolver, Problem, SimpleLineSearch};
 use thesis::scenarios::{Scenario, ScenarioProblem};
-
+mod armadillopara;
+use armadillopara::*;
 const FILENAME: &'static str = "armadillo_projected.txt";
 const COMMENT: &'static str = "naive projected newton";
-const E: f64 = 1e5;
-const NU: f64 = 0.33;
-const MIU: f64 = E / (2.0 * (1.0 + NU));
-const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-const DT: f64 = 0.01;
-const DIM: usize = 3;
-const NFIXED_VERT: usize = 20;
-const DAMP: f64 = 1.0;
-const TOTAL_FRAME: usize = 100;
-
-type EnergyType = NeoHookean3d;
 
 pub struct BouncingUpdateScenario {
     armadillo: Mesh3d,
@@ -75,6 +65,14 @@ impl Problem for BouncingUpdateScenario {
 
         Some(self.inertia_hessian(x) + elastic_hessian)
     }
+
+    fn hessian_inverse_mut<'a>(
+        &'a mut self,
+        _x: &DVector<f64>,
+        // ) -> nalgebra_sparse::factorization::CscCholesky<f64>;
+    ) -> &'a nalgebra_sparse::CscMatrix<f64> {
+        todo!()
+    }
 }
 
 impl ScenarioProblem for BouncingUpdateScenario {
@@ -129,7 +127,7 @@ fn main() {
     let problem = BouncingUpdateScenario::new("armadillotru");
 
     let solver = NewtonSolver {
-        max_iter: 30,
+        max_iter: 300,
         epi: 1e-3,
     };
     let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();

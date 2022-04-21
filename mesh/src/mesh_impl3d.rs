@@ -3,6 +3,7 @@ use autodiff::Hessian;
 use autodiff::MyScalar;
 use nalgebra::DMatrix;
 use nalgebra::DVector;
+use nalgebra::SMatrix;
 use nalgebra::SVector;
 use std::fs::File;
 use std::io::Write;
@@ -167,6 +168,26 @@ impl Mesh3d {
         }
         res
     }
+
+
+    pub fn prim_projected_hessian<E: Energy<12, 3>>(
+        &self,
+        i: usize,
+        energy: &E,
+        vert_vec: SVector<f64, 12>,
+    ) -> SMatrix<f64, 12, 12> {
+        let energy: Hessian<12> = self.prim_energy(i, energy, vert_vec);
+        let small_hessian = energy.hessian();
+        let mut eigendecomposition = small_hessian.symmetric_eigen();
+        for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
+            if *eigenvalue < 0.0 {
+                *eigenvalue = 0.0;
+            }
+        }
+        let small_hessian = eigendecomposition.recompose();
+        small_hessian
+    }
+
 
     pub fn elastic_hessian_projected<E: Energy<12, 3>>(
         &self,
