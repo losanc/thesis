@@ -95,7 +95,7 @@ pub trait Problem {
         &'a mut self,
         _x: &DVector<f64>,
         // ) -> nalgebra_sparse::factorization::CscCholesky<f64>;
-    ) -> CscMatrix<f64>;
+    ) -> &'a CscMatrix<f64>;
 }
 
 pub mod linearsolver;

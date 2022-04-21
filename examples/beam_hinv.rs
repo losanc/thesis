@@ -1,8 +1,5 @@
-use std::ops::IndexMut;
-
-use autodiff::Hessian;
 use mesh::*;
-use nalgebra::{ComplexField, DMatrix, DVector, SMatrix, SVector, VectorSliceMut};
+use nalgebra::{DMatrix, DVector, SMatrix, SVector};
 use nalgebra_sparse::{factorization::CscCholesky, CscMatrix, CsrMatrix};
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
@@ -11,23 +8,6 @@ use parameters2d::*;
 
 const FILENAME: &'static str = "beaminv.txt";
 const COMMENT: &'static str = "inverse hessian";
-// const E: f64 = 1e5;
-// const NU: f64 = 0.4;
-// const MIU: f64 = E / (2.0 * (1.0 + NU));
-// const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-// const DT: f64 = 1.0 / 60.0;
-// const DIM: usize = 2;
-// const CO_NUM: usize = DIM * (DIM + 1);
-
-// const NFIXED_VERT: usize = 2;
-// #[allow(non_upper_case_globals)]
-// const c: usize = 8;
-// const DAMP: f64 = 1.0;
-// const TOTAL_FRAME: usize = 300;
-
-const ACTIVE_SET_EPI: f64 = 0.01;
-
-// type EnergyType = NeoHookean2d;
 
 pub struct BeamScenario {
     beam: Mesh2d,
@@ -39,41 +19,7 @@ pub struct BeamScenario {
     mass: DMatrix<f64>,
     active_set: std::collections::HashSet<usize>,
     hessian_list: Vec<SMatrix<f64, CO_NUM, CO_NUM>>,
-    hessian: CscMatrix<f64>,
-    hessian_cholesky: CscCholesky<f64>,
-}
-
-fn update(old_l: &mut DMatrix<f64>, x_vec: &DVector<f64>, update_flat: bool) {
-    let mut vec_copy = x_vec.clone();
-    for i in 0..old_l.ncols() {
-        let r;
-        if update_flat {
-            r = (old_l[(i, i)] * old_l[(i, i)] + vec_copy[i] * vec_copy[i]).sqrt();
-        } else {
-            r = (old_l[(i, i)] * old_l[(i, i)] - vec_copy[i] * vec_copy[i]).sqrt();
-        }
-        let other_c = r / old_l[(i, i)];
-        let s = vec_copy[i] / old_l[(i, i)];
-        old_l[(i, i)] = r;
-
-        let n = old_l.ncols();
-        if i < n - 1 {
-            let mut lslice = old_l.index_mut((i + 1..n, i));
-            if update_flat {
-                lslice += s * vec_copy.index((i + 1..n, 0));
-            } else {
-                lslice -= s * vec_copy.index((i + 1..n, 0));
-            }
-
-            lslice /= other_c;
-
-            let mut xslice = vec_copy.index_mut((i + 1..n, 0));
-            // println!("xslice before {xslice}");
-            xslice *= other_c;
-            xslice -= s * lslice;
-            // println!("xslice after {xslice}");
-        }
-    }
+    l_matrix: CscMatrix<f64>,
 }
 
 impl BeamScenario {
@@ -89,149 +35,6 @@ impl BeamScenario {
     fn inertia_hessian<'a>(&'a self, _x: &DVector<f64>) -> &'a DMatrix<f64> {
         // self.mass has already been divided by dt*dt when constructing it
         &self.mass
-    }
-
-    fn something(&self, x: &DVector<f64>) -> DMatrix<f64> {
-        let dense = DMatrix::from(&self.hessian);
-        let chol_dense = dense.cholesky().unwrap();
-        let mut l = chol_dense.l();
-        for i in 0..self.beam.n_prims {
-            let indices = self.beam.get_indices(i);
-            let mut vert_vec = SVector::<f64, 6>::zeros();
-            vert_vec
-                .iter_mut()
-                .zip(indices.iter())
-                .for_each(|(g_i, i)| *g_i = x[*i]);
-
-            let small_hessian = self.beam.prim_projected_hessian(i, &self.energy, vert_vec);
-            let diff = &small_hessian - self.hessian_list[i];
-            let mut eigendecomposition = diff.symmetric_eigen();
-
-            for j in 0..CO_NUM {
-                let eigen_value = eigendecomposition.eigenvalues[j];
-                if eigen_value.abs() < 1e-5 {
-                    continue;
-                }
-
-                let update_flag;
-                let mut vector = eigendecomposition.eigenvectors.column_mut(j);
-
-                if eigen_value > 0.0 {
-                    update_flag = true;
-                    vector *= eigen_value.sqrt();
-                } else {
-                    update_flag = false;
-                    vector *= (-eigen_value).sqrt();
-                }
-
-                let mut x_vec = DVector::<f64>::zeros(x.len());
-
-                x_vec[indices[0]] = vector[0];
-                x_vec[indices[1]] = vector[1];
-                x_vec[indices[2]] = vector[2];
-                x_vec[indices[3]] = vector[3];
-                x_vec[indices[4]] = vector[4];
-                x_vec[indices[5]] = vector[5];
-                update(&mut l, &x_vec, update_flag);
-            }
-        }
-        l
-    }
-
-    fn something_sparse(&self, x: &DVector<f64>) -> CscMatrix<f64> {
-        let mut l = self.hessian_cholesky.l().clone();
-        for i in 0..self.beam.n_prims {
-            let indices = self.beam.get_indices(i);
-
-            let mut vert_vec = SVector::<f64, 6>::zeros();
-            vert_vec
-                .iter_mut()
-                .zip(indices.iter())
-                .for_each(|(g_i, i)| *g_i = x[*i]);
-
-            let small_hessian = self.beam.prim_projected_hessian(i, &self.energy, vert_vec);
-            let diff = small_hessian - self.hessian_list[i];
-
-            let mut eigendecomposition = diff.symmetric_eigen();
-            // println!("{}", eigendecomposition.eigenvalues);
-            for j in 0..CO_NUM {
-                let eigen_value = eigendecomposition.eigenvalues[j];
-                if eigen_value.abs() < 1e-5 {
-                    continue;
-                }
-
-                let update_flag;
-                let mut vector = eigendecomposition.eigenvectors.column_mut(j);
-
-                if eigen_value > 0.0 {
-                    update_flag = true;
-                    vector *= eigen_value.sqrt();
-                } else {
-                    update_flag = false;
-                    vector *= (-eigen_value).sqrt();
-                }
-                // println!("{eigen_value}   {update_flag}");
-                let (col_offsets, row_indices, values) = l.csc_data_mut();
-                let n = col_offsets.len() - 1;
-
-                let mut x_vec = DVector::<f64>::zeros(n);
-                if indices[0] >= DIM * NFIXED_VERT {
-                    x_vec[indices[0]] = vector[0];
-                }
-                if indices[1] >= DIM * NFIXED_VERT {
-                    x_vec[indices[1]] = vector[1];
-                }
-                if indices[2] >= DIM * NFIXED_VERT {
-                    x_vec[indices[2]] = vector[2];
-                }
-                if indices[3] >= DIM * NFIXED_VERT {
-                    x_vec[indices[3]] = vector[3];
-                }
-                if indices[4] >= DIM * NFIXED_VERT {
-                    x_vec[indices[4]] = vector[4];
-                }
-                if indices[5] >= DIM * NFIXED_VERT {
-                    x_vec[indices[5]] = vector[5];
-                }
-
-                for k in 0..n {
-                    let lkk = values.index_mut(col_offsets[k]);
-                    let xk = x_vec[k];
-                    if xk.abs() < 1e-5 {
-                        continue;
-                    }
-                    let lkkv = *lkk;
-                    let r;
-                    if update_flag {
-                        r = lkkv * lkkv + xk * xk;
-                    } else {
-                        r = lkkv * lkkv - xk * xk;
-                    }
-                    if r < 0.0 {
-                        panic!("{}  {} cao!", k, r);
-                    }
-                    let r = r.sqrt();
-                    let other_c = r / lkkv;
-                    let s = xk / lkkv;
-                    *lkk = r;
-
-                    for m in col_offsets[k] + 1..col_offsets[k + 1] {
-                        // println!("{m}");
-                        let r_index = row_indices[m];
-                        let v = values.index_mut(m);
-                        let x_r_index = x_vec.index_mut(r_index);
-                        if update_flag {
-                            *v = (*v + s * *x_r_index) / other_c;
-                        } else {
-                            *v = (*v - s * *x_r_index) / other_c;
-                        }
-                        *x_r_index *= other_c;
-                        *x_r_index -= s * *v;
-                    }
-                }
-            }
-        }
-        l
     }
 }
 impl Problem for BeamScenario {
@@ -287,49 +90,100 @@ impl Problem for BeamScenario {
         }
         Some(CsrMatrix::from(&res))
     }
-    fn hessian_inverse_mut(&mut self, x: &DVector<f64>) -> CscMatrix<f64> {
-        let l2 = self.something_sparse(x);
+    fn hessian_inverse_mut<'a>(&'a mut self, x: &DVector<f64>) -> &'a CscMatrix<f64> {
+        let update_triangle_list = self
+            .active_set
+            .iter()
+            .map(|x| self.beam.vert_connected_prim_indices[*x].clone())
+            .flatten()
+            .collect::<std::collections::HashSet<usize>>();
 
-        for i in 0..self.beam.n_prims {
+        let l = &mut self.l_matrix;
+        // println!("{}  {}",update_triangle_list.len(),self.beam.n_prims);
+
+        for i in update_triangle_list {
             let indices = self.beam.get_indices(i);
+
             let mut vert_vec = SVector::<f64, 6>::zeros();
             vert_vec
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = x[*i]);
+
             let small_hessian = self.beam.prim_projected_hessian(i, &self.energy, vert_vec);
-            let diff = &small_hessian - self.hessian_list[i];
-            for m in 0..CO_NUM {
-                for n in 0..CO_NUM {
-                    let sparse_entry = self.hessian.get_entry_mut(indices[m], indices[n]).unwrap();
-                    match sparse_entry {
-                        nalgebra_sparse::SparseEntryMut::NonZero(v) => *v += diff[(m, n)],
-                        nalgebra_sparse::SparseEntryMut::Zero => todo!(),
+            let diff = small_hessian - self.hessian_list[i];
+
+            let mut eigendecomposition = diff.symmetric_eigen();
+
+            for j in 0..CO_NUM {
+                let eigen_value = eigendecomposition.eigenvalues[j];
+                if eigen_value.abs() < 1e-5 {
+                    continue;
+                }
+
+                let update_flag;
+                let mut vector = eigendecomposition.eigenvectors.column_mut(j);
+
+                if eigen_value > 0.0 {
+                    update_flag = true;
+                    vector *= eigen_value.sqrt();
+                } else {
+                    update_flag = false;
+                    vector *= (-eigen_value).sqrt();
+                }
+                let (col_offsets, row_indices, values) = l.csc_data_mut();
+                let n = col_offsets.len() - 1;
+
+                let mut x_vec = DVector::<f64>::zeros(n);
+                x_vec[indices[0]] = vector[0];
+                x_vec[indices[1]] = vector[1];
+                x_vec[indices[2]] = vector[2];
+                x_vec[indices[3]] = vector[3];
+                x_vec[indices[4]] = vector[4];
+                x_vec[indices[5]] = vector[5];
+
+                x_vec.index_mut((0..DIM * NFIXED_VERT, 0)).fill(0.0);
+
+                unsafe {
+                    for k in 0..n {
+                        let xk = x_vec.get_unchecked(k);
+                        if xk.abs() < 1e-5 {
+                            continue;
+                        }
+                        let lkk = values.get_unchecked_mut(*col_offsets.get_unchecked(k));
+                        let lkkv = *lkk;
+                        let r;
+                        if update_flag {
+                            r = lkkv * lkkv + xk * xk;
+                        } else {
+                            r = lkkv * lkkv - xk * xk;
+                        }
+                        assert!(r > 0.0);
+                        let r = r.sqrt();
+                        let other_c = r / lkkv;
+                        let s = xk / lkkv;
+                        *lkk = r;
+
+                        // possible for simd optimization
+                        for m in col_offsets.get_unchecked(k) + 1..*col_offsets.get_unchecked(k + 1)
+                        {
+                            let r_index = *row_indices.get_unchecked(m);
+                            let v = values.get_unchecked_mut(m);
+                            let x_r_index = x_vec.get_unchecked_mut(r_index);
+                            if update_flag {
+                                *v = (*v + s * *x_r_index) / other_c;
+                            } else {
+                                *v = (*v - s * *x_r_index) / other_c;
+                            }
+                            *x_r_index *= other_c;
+                            *x_r_index -= s * *v;
+                        }
                     }
                 }
             }
             self.hessian_list[i] = small_hessian;
         }
-        // let mut self_hessian_clone = self.hessian.clone();
-
-        for (i, j, k) in self.hessian.triplet_iter_mut() {
-            if (i < DIM * NFIXED_VERT || j < DIM * NFIXED_VERT) && (i != j) {
-                *k = 0.0;
-            }
-        }
-        self.hessian_cholesky = CscCholesky::factor(&self.hessian).unwrap();
-        // let res = CscCholesky::factor(&self.hessian).unwrap().l().clone();
-        // println!("{:.3}",DMatrix::from(&res));
-
-        // CscCholesky::factor(&self_hessian_clone).unwrap()
-        // res
-
-        // println!(
-        //     "real {:.2}",
-        //     DMatrix::from(&res)
-        // );
-
-        l2
+        &self.l_matrix
     }
 }
 
@@ -385,7 +239,7 @@ impl BeamScenario {
             }
         }
 
-        let cholesky = CscCholesky::factor(&init_hessian).unwrap();
+        let l_matrix = CscCholesky::factor(&init_hessian).unwrap().l().clone();
 
         let mut old_hessian_list = Vec::<SMatrix<f64, CO_NUM, CO_NUM>>::new();
         for i in 0..p.n_prims {
@@ -411,8 +265,7 @@ impl BeamScenario {
             g_vec,
             active_set: std::collections::HashSet::<usize>::new(),
             hessian_list: old_hessian_list,
-            hessian_cholesky: cholesky,
-            hessian: init_hessian,
+            l_matrix,
         };
         scenario
     }
@@ -433,9 +286,11 @@ fn main() {
         epi: 1e-7,
     };
     let mut b = Scenario::new(problem, solver, linearsolver, linesearch, FILENAME, COMMENT);
-
+    let start = std::time::Instant::now();
     for _i in 0..TOTAL_FRAME {
         println!("running frame: {}", _i);
         b.step();
     }
+    let duration = start.elapsed().as_secs_f32();
+    println!("time spent {duration}");
 }

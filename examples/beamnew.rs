@@ -1,7 +1,7 @@
 use autodiff::Hessian;
 use mesh::*;
 use nalgebra::{DMatrix, DVector, SMatrix, SVector};
-use nalgebra_sparse::CsrMatrix;
+use nalgebra_sparse::CscMatrix;
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
 mod parameters2d;
@@ -9,21 +9,6 @@ use parameters2d::*;
 
 const FILENAME: &'static str = "beamnew.txt";
 const COMMENT: &'static str = "modifited";
-// const E: f64 = 1e7;
-// const NU: f64 = 0.33;
-// const MIU: f64 = E / (2.0 * (1.0 + NU));
-// const LAMBDA: f64 = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-// const DT: f64 = 1.0 / 60.0;
-// const DIM: usize = 2;
-
-// const NFIXED_VERT: usize = 10;
-// #[allow(non_upper_case_globals)]
-// const c: usize = 40;
-// const SIZE: f64 = 0.25;
-// const DAMP: f64 = 1.0;
-// const TOTAL_FRAME: usize = 200;
-
-const ACTIVE_SET_EPI: f64 = 0.01;
 
 pub struct BeamScenario {
     beam: Mesh2d,
@@ -53,7 +38,7 @@ impl BeamScenario {
     }
 }
 impl Problem for BeamScenario {
-    type HessianType = CsrMatrix<f64>;
+    type HessianType = CscMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
         let mut res = 0.0;
         res += self.inertia_apply(x);
@@ -103,7 +88,7 @@ impl Problem for BeamScenario {
         for i in slice.iter_mut() {
             *i = 0.0;
         }
-        Some(CsrMatrix::from(&res))
+        Some(CscMatrix::from(&res))
     }
 
     fn hessian_mut(&mut self, x: &DVector<f64>) -> Option<Self::HessianType> {
@@ -163,13 +148,10 @@ impl Problem for BeamScenario {
         for i in slice.iter_mut() {
             *i = 0.0;
         }
-        Some(CsrMatrix::from(&res))
+        Some(CscMatrix::from(&res))
     }
 
-    fn hessian_inverse_mut<'a>(
-        &'a mut self,
-        _x: &DVector<f64>,
-    ) -> nalgebra_sparse::factorization::CscCholesky<f64> {
+    fn hessian_inverse_mut<'a>(&'a mut self, _x: &DVector<f64>) -> &'a CscMatrix<f64> {
         todo!()
     }
 }
@@ -265,8 +247,7 @@ fn main() {
         max_iter: 100,
         epi: 1e-5,
     };
-    let mut linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
-    linearsolver.tol = 1e-10;
+    let linearsolver = CscCholeskySolver {};
     let linesearch = SimpleLineSearch {
         alpha: 0.9,
         tol: 0.01,
