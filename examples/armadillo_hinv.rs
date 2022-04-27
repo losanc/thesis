@@ -1,14 +1,13 @@
 use autodiff::Hessian;
 use mesh::{armadillo, Mesh3d};
 use nalgebra::{DMatrix, DVector, SMatrix, SVector};
-use nalgebra_sparse::{CsrMatrix, CscMatrix, factorization::CscCholesky};
+use nalgebra_sparse::{factorization::CscCholesky, CscMatrix, CsrMatrix};
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
 mod armadillopara;
 use armadillopara::*;
 const FILENAME: &'static str = "armadillo_chol_inv.txt";
 const COMMENT: &'static str = "newton with chol";
-
 
 pub struct BouncingUpdateScenario {
     armadillo: Mesh3d,
@@ -86,7 +85,7 @@ impl Problem for BouncingUpdateScenario {
             .collect::<std::collections::HashSet<usize>>();
 
         let l = &mut self.l_matrix;
-        println!("{}  {}",update_triangle_list.len(),self.armadillo.n_prims);
+        println!("{}  {}", update_triangle_list.len(), self.armadillo.n_prims);
 
         for i in update_triangle_list {
             let indices = self.armadillo.get_indices(i);
@@ -97,7 +96,9 @@ impl Problem for BouncingUpdateScenario {
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = x[*i]);
 
-            let small_hessian = self.armadillo.prim_projected_hessian(i, &self.energy, vert_vec);
+            let small_hessian = self
+                .armadillo
+                .prim_projected_hessian(i, &self.energy, vert_vec);
             let diff = small_hessian - self.hessian_list[i];
 
             let mut eigendecomposition = diff.symmetric_eigen();
@@ -145,7 +146,7 @@ impl Problem for BouncingUpdateScenario {
                         }
                         let lkk = values.get_unchecked_mut(*col_offsets.get_unchecked(k));
                         let lkkv = *lkk;
-                        let r = lkkv*lkkv +update_flag*xk*xk;
+                        let r = lkkv * lkkv + update_flag * xk * xk;
                         assert!(r > 0.0);
                         let r = r.sqrt();
                         let other_c = r / lkkv;
@@ -158,7 +159,7 @@ impl Problem for BouncingUpdateScenario {
                             let r_index = *row_indices.get_unchecked(m);
                             let v = values.get_unchecked_mut(m);
                             let x_r_index = x_vec.get_unchecked_mut(r_index);
-                            *v = (*v + update_flag* s * *x_r_index) / other_c;
+                            *v = (*v + update_flag * s * *x_r_index) / other_c;
                             *x_r_index *= other_c;
                             *x_r_index -= s * *v;
                         }

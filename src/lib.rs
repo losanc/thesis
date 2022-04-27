@@ -6,6 +6,10 @@
 pub mod scenarios;
 pub mod static_object;
 
+pub mod bindings;
+pub mod csc;
+pub use bindings::*;
+
 // pub fn get_csr_index(matrix: &CsrMatrix<f64>, r: usize, c: usize) -> usize {
 //     let (row_offsets, col_indices, _) = matrix.csr_data();
 //     for i in row_offsets[r]..row_offsets[r + 1] {

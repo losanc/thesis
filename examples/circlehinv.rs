@@ -1,15 +1,16 @@
+use autodiff::Hessian;
 use mesh::*;
 use nalgebra::{DMatrix, DVector, SMatrix, SVector};
-use nalgebra_sparse::{factorization::CscCholesky, CscMatrix, CsrMatrix};
+use nalgebra_sparse::{factorization::CscCholesky, CscMatrix};
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
-mod parameters2d;
-use parameters2d::*;
+mod circlepara;
+use circlepara::*;
 
-const FILENAME: &'static str = "beaminv.txt";
-const COMMENT: &'static str = "inverse hessian";
+pub const FILENAME: &'static str = "circlehinv.txt";
+pub const COMMENT: &'static str = "inverse chol";
 
-pub struct BeamScenario {
+pub struct CircleScenario {
     beam: Mesh2d,
     dt: f64,
     name: String,
@@ -21,8 +22,7 @@ pub struct BeamScenario {
     hessian_list: Vec<SMatrix<f64, CO_NUM, CO_NUM>>,
     l_matrix: CscMatrix<f64>,
 }
-
-impl BeamScenario {
+impl CircleScenario {
     fn inertia_apply(&self, x: &DVector<f64>) -> f64 {
         let temp = x - &self.x_tao - &self.g_vec * (self.dt * self.dt);
         let res = temp.dot(&(&self.mass * &temp));
@@ -32,13 +32,14 @@ impl BeamScenario {
         let res_grad = &self.mass * (x - &self.x_tao - &self.g_vec * (self.dt * self.dt));
         res_grad
     }
-    fn inertia_hessian<'a>(&'a self, _x: &DVector<f64>) -> &'a DMatrix<f64> {
-        // self.mass has already been divided by dt*dt when constructing it
-        &self.mass
-    }
+    // fn inertia_hessian<'a>(&'a self, _x: &DVector<f64>) -> &'a DMatrix<f64> {
+    //     // self.mass has already been divided by dt*dt when constructing it
+    //     &self.mass
+    // }
 }
-impl Problem for BeamScenario {
-    type HessianType = CsrMatrix<f64>;
+
+impl Problem for CircleScenario {
+    type HessianType = CscMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
         let mut res = 0.0;
         res += self.inertia_apply(x);
@@ -51,13 +52,8 @@ impl Problem for BeamScenario {
         res += self.inertia_gradient(x);
         res += self.beam.elastic_gradient(x, &self.energy);
 
-        let mut slice = res.index_mut((0..NFIXED_VERT * DIM, 0));
-        for i in slice.iter_mut() {
-            *i = 0.0;
-        }
         Some(res)
     }
-
     fn gradient_mut(&mut self, x: &DVector<f64>) -> Option<DVector<f64>> {
         let res = self.gradient(x).unwrap();
         // reset active set
@@ -70,25 +66,14 @@ impl Problem for BeamScenario {
                 }
             });
         }
+
         Some(res)
     }
 
-    fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
-        // dense version of hessian matrix
-        let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
-        res = res + self.inertia_hessian(x);
-        res += self.beam.elastic_hessian(x, &self.energy);
-
-        let mut slice = res.index_mut((0..NFIXED_VERT * DIM, NFIXED_VERT * DIM..));
-        for i in slice.iter_mut() {
-            *i = 0.0;
-        }
-        let mut slice = res.index_mut((NFIXED_VERT * DIM.., 0..NFIXED_VERT * DIM));
-        for i in slice.iter_mut() {
-            *i = 0.0;
-        }
-        Some(CsrMatrix::from(&res))
+    fn hessian_mut(&mut self, _x: &DVector<f64>) -> Option<Self::HessianType> {
+        None
     }
+
     fn hessian_inverse_mut<'a>(&'a mut self, x: &DVector<f64>) -> &'a CscMatrix<f64> {
         let update_triangle_list = self
             .active_set
@@ -141,8 +126,6 @@ impl Problem for BeamScenario {
                 x_vec[indices[4]] = vector[4];
                 x_vec[indices[5]] = vector[5];
 
-                x_vec.index_mut((0..DIM * NFIXED_VERT, 0)).fill(0.0);
-
                 unsafe {
                     for k in 0..n {
                         let xk = x_vec.get_unchecked(k);
@@ -177,7 +160,7 @@ impl Problem for BeamScenario {
     }
 }
 
-impl ScenarioProblem for BeamScenario {
+impl ScenarioProblem for CircleScenario {
     fn initial_guess(&self) -> DVector<f64> {
         self.beam.verts.clone()
     }
@@ -198,22 +181,23 @@ impl ScenarioProblem for BeamScenario {
     }
 }
 
-impl BeamScenario {
+impl CircleScenario {
     pub fn new(name: &str) -> Self {
-        let mut p = plane(NFIXED_VERT, c, Some(SIZE), Some(SIZE), None);
+        let mut p = circle(R, RES, None);
 
-        // init velocity
-        for i in 0..c {
-            for j in 0..NFIXED_VERT {
-                p.velos[DIM * (i * NFIXED_VERT + j)] =
-                    -1.0 * (i as f64) * (i as f64) * (i as f64 / 20.0) * SIZE * SIZE * SIZE;
-            }
+        for i in 0..p.n_verts {
+            p.verts[DIM * i] *= 2.0;
+            p.verts[DIM * i + 1] *= 0.5;
+        }
+        for i in 0..p.n_verts {
+            p.velos[DIM * i] = 0.1 * (i as f64) * p.verts[DIM * i];
+            p.velos[DIM * i + 1] = 0.1 * (i as f64) * p.verts[DIM * i + 1];
         }
 
-        let mut g_vec = DVector::zeros(DIM * p.n_verts);
-        for i in NFIXED_VERT..p.n_verts {
-            g_vec[DIM * i] = -9.8;
-        }
+        let g_vec = DVector::zeros(DIM * p.n_verts);
+        // for i in NFIXED_VERT..p.n_verts {
+        //     g_vec[DIM * i] = -9.8;
+        // }
         let energy = EnergyType {
             mu: MIU,
             lambda: LAMBDA,
@@ -221,13 +205,7 @@ impl BeamScenario {
 
         let mass = DMatrix::from_diagonal(&p.masss) / (DT * DT);
         let elastic_psd_hessian = p.elastic_hessian_projected(&p.verts, &energy);
-
-        let mut init_hessian = CscMatrix::from(&elastic_psd_hessian) + CscMatrix::from(&mass);
-        for (i, j, k) in init_hessian.triplet_iter_mut() {
-            if (i < DIM * NFIXED_VERT || j < DIM * NFIXED_VERT) && (i != j) {
-                *k = 0.0;
-            }
-        }
+        let init_hessian = CscMatrix::from(&elastic_psd_hessian) + CscMatrix::from(&mass);
 
         let l_matrix = CscCholesky::factor(&init_hessian).unwrap().l().clone();
 
@@ -240,12 +218,20 @@ impl BeamScenario {
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = p.verts[*i]);
+            let energy: Hessian<CO_NUM> = p.prim_energy(i, &energy, vert_vec);
 
-            let small_hessian = p.prim_projected_hessian(i, &energy, vert_vec);
-            old_hessian_list.push(small_hessian);
+            let energy_hessian = energy.hessian();
+            let mut eigendecomposition = energy_hessian.symmetric_eigen();
+            for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
+                if *eigenvalue < 0.0 {
+                    *eigenvalue = 0.0;
+                }
+            }
+            let energy_hessian = eigendecomposition.recompose();
+            old_hessian_list.push(energy_hessian);
         }
 
-        let scenario = Self {
+        Self {
             dt: DT,
             energy,
             name: String::from(name),
@@ -256,20 +242,19 @@ impl BeamScenario {
             active_set: std::collections::HashSet::<usize>::new(),
             hessian_list: old_hessian_list,
             l_matrix,
-        };
-        scenario
+        }
     }
 }
 
 fn main() {
-    let problem = BeamScenario::new("beam_hinv");
+    let problem = CircleScenario::new("circlehinv");
 
     let solver = NewtonInverseSolver {
         max_iter: 500,
-        epi: 1e-3,
+        epi: 1e-5,
     };
-    let mut linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
-    linearsolver.tol = 1e-10;
+    // let mut linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
+    let linearsolver = CscCholeskySolver {};
     let linesearch = SimpleLineSearch {
         alpha: 0.9,
         tol: 0.01,

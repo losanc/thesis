@@ -1,14 +1,13 @@
 use autodiff::Hessian;
 use mesh::{armadillo, Mesh3d};
 use nalgebra::{DMatrix, DVector, SMatrix, SVector};
-use nalgebra_sparse::CsrMatrix;
+use nalgebra_sparse::{CscMatrix, CsrMatrix};
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
 mod armadillopara;
 use armadillopara::*;
 const FILENAME: &'static str = "armadillo_projected_fast.txt";
 const COMMENT: &'static str = "naive projected newton";
-
 
 pub struct BouncingUpdateScenario {
     armadillo: Mesh3d,
@@ -17,7 +16,7 @@ pub struct BouncingUpdateScenario {
     energy: EnergyType,
     x_tao: DVector<f64>,
     g_vec: DVector<f64>,
-    mass: CsrMatrix<f64>,
+    mass: CscMatrix<f64>,
 
     active_set: std::collections::HashSet<usize>,
     hessian_list: Vec<SMatrix<f64, CO_NUM, CO_NUM>>,
@@ -33,13 +32,13 @@ impl BouncingUpdateScenario {
         let res_grad = &self.mass * (x - &self.x_tao - &self.g_vec * (self.dt * self.dt));
         res_grad
     }
-    fn inertia_hessian<'a>(&'a self, _x: &DVector<f64>) -> &'a CsrMatrix<f64> {
+    fn inertia_hessian<'a>(&'a self, _x: &DVector<f64>) -> &'a CscMatrix<f64> {
         // self.mass has already been divided by dt*dt when constructing it
         &self.mass
     }
 }
 impl Problem for BouncingUpdateScenario {
-    type HessianType = CsrMatrix<f64>;
+    type HessianType = CscMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
         let mut res = 0.0;
         res += self.inertia_apply(x);
@@ -138,7 +137,7 @@ impl Problem for BouncingUpdateScenario {
         }
 
         // res += &self.init_hessian;
-        let mut sparse = CsrMatrix::from(&self.init_hessian);
+        let mut sparse = CscMatrix::from(&self.init_hessian);
         for (i, j, k) in sparse.triplet_iter_mut() {
             if i < NFIXED_VERT * DIM || j < NFIXED_VERT * DIM {
                 *k = 0.0;
@@ -219,7 +218,7 @@ impl BouncingUpdateScenario {
             dt: DT,
             energy,
             name: String::from(name),
-            mass: CsrMatrix::from(&mass),
+            mass: CscMatrix::from(&mass),
             armadillo: p,
 
             x_tao: DVector::<f64>::zeros(1),
@@ -233,13 +232,15 @@ impl BouncingUpdateScenario {
 }
 
 fn main() {
-    let problem = BouncingUpdateScenario::new("armadillotru");
+    let problem = BouncingUpdateScenario::new("armadillonew");
 
     let solver = NewtonSolverMut {
         max_iter: 300,
         epi: 1e-3,
     };
-    let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
+    // let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
+
+    let linearsolver = CscCholeskySolver {};
     let linesearch = SimpleLineSearch {
         alpha: 0.9,
         tol: 1e-5,

@@ -169,7 +169,6 @@ impl Mesh3d {
         res
     }
 
-
     pub fn prim_projected_hessian<E: Energy<12, 3>>(
         &self,
         i: usize,
@@ -187,7 +186,6 @@ impl Mesh3d {
         let small_hessian = eigendecomposition.recompose();
         small_hessian
     }
-
 
     pub fn elastic_hessian_projected<E: Energy<12, 3>>(
         &self,
