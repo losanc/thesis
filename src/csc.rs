@@ -1,6 +1,6 @@
 use std::mem::MaybeUninit;
 
-use nalgebra::{DVector, Dim, OMatrix, RawStorage, RawStorageMut};
+use nalgebra::{DVector, Dim, RawStorage, RawStorageMut};
 
 use crate::*;
 #[derive(Debug, Clone)]

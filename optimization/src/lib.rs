@@ -120,14 +120,17 @@ pub trait Solver<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: L
     Sized
 {
     fn epi(&self) -> f64;
-    fn solve<T: std::io::Write>(
+    // #[cfg(feature = "log")]
+    fn solve<T>(
         &self,
         pro: &mut P,
         lin: &L,
         ls: &LS,
         input: &DVector<f64>,
-        log: &mut T,
-    ) -> DVector<f64>;
+        #[cfg(feature = "log")] log: &mut T,
+    ) -> DVector<f64>
+    where
+        T: std::io::Write;
 }
 
 #[macro_export]

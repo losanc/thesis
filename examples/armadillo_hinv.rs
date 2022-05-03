@@ -32,6 +32,7 @@ impl BouncingUpdateScenario {
         let res_grad = &self.mass * (x - &self.x_tao - &self.g_vec * (self.dt * self.dt));
         res_grad
     }
+    #[allow(dead_code)]
     fn inertia_hessian<'a>(&'a self, _x: &DVector<f64>) -> &'a CsrMatrix<f64> {
         // self.mass has already been divided by dt*dt when constructing it
         &self.mass

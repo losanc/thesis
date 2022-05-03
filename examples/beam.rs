@@ -1,6 +1,6 @@
 use mesh::*;
 use nalgebra::{DMatrix, DVector};
-use nalgebra_sparse::CscMatrix;
+use nalgebra_sparse::{CscMatrix, CsrMatrix};
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
 mod parameters2d;
@@ -35,7 +35,7 @@ impl BeamScenario {
 }
 
 impl Problem for BeamScenario {
-    type HessianType = CscMatrix<f64>;
+    type HessianType = CsrMatrix<f64>;
     fn apply(&self, x: &DVector<f64>) -> f64 {
         let mut res = 0.0;
         res += self.inertia_apply(x);
@@ -72,7 +72,7 @@ impl Problem for BeamScenario {
         for i in slice.iter_mut() {
             *i = 0.0;
         }
-        Some(CscMatrix::from(&res))
+        Some(CsrMatrix::from(&res))
     }
 
     fn hessian_inverse_mut<'a>(&'a mut self, _x: &DVector<f64>) -> &'a CscMatrix<f64> {
@@ -143,8 +143,8 @@ fn main() {
         max_iter: 500,
         epi: 1e-3,
     };
-    // let mut linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
-    let linearsolver = CscCholeskySolver {};
+    let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
+    // let linearsolver = CscCholeskySolver {};
     let linesearch = SimpleLineSearch {
         alpha: 0.9,
         tol: 0.01,

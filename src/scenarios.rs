@@ -26,9 +26,7 @@ pub struct Scenario<
     linearsolver: LSo,
     ls: LSe,
     #[cfg(feature = "log")]
-    file1: std::fs::File,
-    #[cfg(not(feature = "log"))]
-    file1: Vec<u8>,
+    file: std::fs::File,
 }
 
 impl<P, S, LSo, LSe> Scenario<P, S, LSo, LSe>
@@ -39,15 +37,11 @@ where
     LSe: LineSearch<P>,
 {
     pub fn new(p: P, s: S, lso: LSo, lse: LSe, filename: &str, comment: &str) -> Self {
-        let mut file1;
+        let mut file: std::fs::File;
         #[cfg(feature = "log")]
         {
-            file1 = std::fs::File::create(filename).unwrap();
-            writeln!(file1, "{}", comment).unwrap();
-        }
-        #[cfg(not(feature = "log"))]
-        {
-            file1 = Vec::<u8>::new();
+            file = std::fs::File::create(filename).unwrap();
+            writeln!(file, "{}", comment).unwrap();
         }
 
         Scenario {
@@ -56,7 +50,8 @@ where
             solver: s,
             linearsolver: lso,
             ls: lse,
-            file1,
+            #[cfg(feature = "log")]
+            file,
         }
     }
 
@@ -66,20 +61,17 @@ where
         // let start = std::time::Instant::now();
         #[cfg(feature = "log")]
         {
-            writeln!(self.file1, "\n\nFrame: {}", self.frame).unwrap();
+            writeln!(self.file, "\n\nFrame: {}", self.frame).unwrap();
         }
-        let res2 = self.solver.solve(
+        let res2 = self.solver.solve::<std::fs::File>(
             &mut self.problem,
             &self.linearsolver,
             &self.ls,
             &initial_guess,
-            &mut self.file1,
+            #[cfg(feature = "log")]
+            &mut self.file,
         );
-        // #[cfg(feature = "log")]
-        // {
-        //     let duration = start.elapsed();
-        //     writeln!(self.file1, "Duration: {}\n\n", duration.as_secs_f32()).unwrap();
-        // }
+
         self.problem.set_all_vertices_vector(res2);
         self.frame += 1;
         self.problem.frame_end();

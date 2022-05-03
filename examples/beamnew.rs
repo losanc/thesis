@@ -107,6 +107,8 @@ impl Problem for BeamScenario {
             .flatten()
             .collect::<std::collections::HashSet<usize>>();
 
+        println!("{}   {}", update_triangle_list.len(), self.beam.n_prims);
+
         for i in update_triangle_list {
             let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
             let indices = self.beam.get_indices(i);

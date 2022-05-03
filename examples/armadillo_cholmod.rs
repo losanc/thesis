@@ -12,14 +12,14 @@ use thesis::{
     csc::{csc_convert, Csc64},
     scenarios::{Scenario, ScenarioProblem},
 };
-mod parameters2d;
-use parameters2d::*;
+mod armadillopara;
+use armadillopara::*;
 
-const FILENAME: &'static str = "beaminv.txt";
-const COMMENT: &'static str = "inverse hessian";
+const FILENAME: &'static str = "armadillo_cholmod.txt";
+const COMMENT: &'static str = "armadillo cholmod";
 
-pub struct BeamScenario {
-    beam: Mesh2d,
+pub struct ArmadilloScenario {
+    armadillo: Mesh3d,
     dt: f64,
     name: String,
     energy: EnergyType,
@@ -32,7 +32,7 @@ pub struct BeamScenario {
     active_set: std::collections::HashSet<usize>,
 }
 
-impl Problem for BeamScenario {
+impl Problem for ArmadilloScenario {
     type HessianType = DMatrix<f64>;
 
     fn apply(&self, x: &DVector<f64>) -> f64 {
@@ -52,7 +52,7 @@ impl Problem for BeamScenario {
     }
 }
 
-impl BeamScenario {
+impl ArmadilloScenario {
     fn inertia_apply(&self, x: &DVector<f64>) -> f64 {
         let temp = x - &self.x_tao - &self.g_vec * (self.dt * self.dt);
         let res = temp.dot(&(&self.mass * &temp));
@@ -67,7 +67,7 @@ impl BeamScenario {
     fn my_apply(&self, x: &DVector<f64>) -> f64 {
         let mut res = 0.0;
         res += self.inertia_apply(x);
-        res += self.beam.elastic_apply(x, &self.energy);
+        res += self.armadillo.elastic_apply(x, &self.energy);
         res
     }
     fn inertia_hessian<'a>(&'a self, _x: &DVector<f64>) -> &'a DMatrix<f64> {
@@ -92,7 +92,7 @@ impl BeamScenario {
     fn my_gradient(&self, x: &DVector<f64>) -> Option<DVector<f64>> {
         let mut res = DVector::<f64>::zeros(x.len());
         res += self.inertia_gradient(x);
-        res += self.beam.elastic_gradient(x, &self.energy);
+        res += self.armadillo.elastic_gradient(x, &self.energy);
 
         let mut slice = res.index_mut((0..NFIXED_VERT * DIM, 0));
         for i in slice.iter_mut() {
@@ -105,7 +105,7 @@ impl BeamScenario {
     fn my_hessian(&self, x: &DVector<f64>) -> DMatrix<f64> {
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res = res + self.inertia_hessian(x);
-        res += self.beam.elastic_hessian_projected(x, &self.energy);
+        res += self.armadillo.elastic_hessian_projected(x, &self.energy);
 
         let mut slice = res.index_mut((0..NFIXED_VERT * DIM, NFIXED_VERT * DIM..));
         for i in slice.iter_mut() {
@@ -122,23 +122,26 @@ impl BeamScenario {
         let update_triangle_list = self
             .active_set
             .iter()
-            .map(|x| self.beam.vert_connected_prim_indices[*x].clone())
+            .map(|x| self.armadillo.vert_connected_prim_indices[*x].clone())
             .flatten()
             .collect::<std::collections::HashSet<usize>>();
 
         for i in update_triangle_list {
-            let indices = self.beam.get_indices(i);
+            let indices = self.armadillo.get_indices(i);
 
-            let mut vert_vec = SVector::<f64, 6>::zeros();
+            let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
             vert_vec
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = x[*i]);
 
-            let small_hessian = self.beam.prim_projected_hessian(i, &self.energy, vert_vec);
+            let small_hessian = self
+                .armadillo
+                .prim_projected_hessian(i, &self.energy, vert_vec);
             let diff = small_hessian - self.hessian_list[i];
 
             let mut eigendecomposition = diff.symmetric_eigen();
+
             for j in 0..CO_NUM {
                 let eigen_value = eigendecomposition.eigenvalues[j];
                 if eigen_value.abs() < 1e-5 {
@@ -157,15 +160,11 @@ impl BeamScenario {
                 }
 
                 let mut x_vec = DVector::<f64>::zeros(x.len());
-
-                x_vec[indices[0]] = vector[0];
-                x_vec[indices[1]] = vector[1];
-                x_vec[indices[2]] = vector[2];
-                x_vec[indices[3]] = vector[3];
-                x_vec[indices[4]] = vector[4];
-                x_vec[indices[5]] = vector[5];
-
-                x_vec.index_mut((0..DIM * NFIXED_VERT, 0)).fill(0.0);
+                indices.iter().enumerate().for_each(|(i, x)| {
+                    if *x >= DIM * NFIXED_VERT {
+                        x_vec[*x] = vector[i]
+                    }
+                });
 
                 unsafe {
                     let mut dense = thesis::csc::dense_convert(&mut x_vec, &mut self.c);
@@ -193,40 +192,33 @@ impl BeamScenario {
     }
 
     fn new() -> Self {
-        let mut plane = plane(NFIXED_VERT, c, Some(SIZE), Some(SIZE), None);
-
-        for i in 0..c {
-            for j in 0..NFIXED_VERT {
-                plane.velos[DIM * (i * NFIXED_VERT + j)] =
-                    -1.0 * (i as f64) * (i as f64) * (i as f64 / 20.0) * SIZE * SIZE * SIZE;
-            }
-        }
+        let armadillo = armadillo();
 
         let energy = EnergyType {
             mu: MIU,
             lambda: LAMBDA,
         };
-        let mut energy_hessian = plane.elastic_hessian_projected(&plane.verts, &energy);
+        let mut energy_hessian = armadillo.elastic_hessian_projected(&armadillo.verts, &energy);
 
-        let mass = DMatrix::from_diagonal(&plane.masss) / (DT * DT);
+        let mass = DMatrix::from_diagonal(&armadillo.masss) / (DT * DT);
         energy_hessian += &mass;
 
-        let mut g_vec = DVector::zeros(DIM * plane.n_verts);
-        for i in NFIXED_VERT..plane.n_verts {
-            g_vec[DIM * i] = -9.8;
+        let mut g_vec = DVector::zeros(DIM * armadillo.n_verts);
+        for i in NFIXED_VERT..armadillo.n_verts {
+            g_vec[DIM * i + 1] = -9.8;
         }
 
         let mut old_hessian_list = Vec::<SMatrix<f64, CO_NUM, CO_NUM>>::new();
-        for i in 0..plane.n_prims {
+        for i in 0..armadillo.n_prims {
             let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
-            let indices = plane.get_indices(i);
+            let indices = armadillo.get_indices(i);
 
             vert_vec
                 .iter_mut()
                 .zip(indices.iter())
-                .for_each(|(g_i, i)| *g_i = plane.verts[*i]);
+                .for_each(|(g_i, i)| *g_i = armadillo.verts[*i]);
 
-            let small_hessian = plane.prim_projected_hessian(i, &energy, vert_vec);
+            let small_hessian = armadillo.prim_projected_hessian(i, &energy, vert_vec);
             old_hessian_list.push(small_hessian);
         }
 
@@ -254,9 +246,9 @@ impl BeamScenario {
             );
 
             Self {
-                beam: plane,
+                armadillo,
                 dt: DT,
-                name: String::from("beam_cholmod"),
+                name: String::from("armadillo_cholmod"),
                 energy,
                 x_tao: DVector::<f64>::zeros(1),
                 g_vec,
@@ -270,23 +262,23 @@ impl BeamScenario {
     }
 
     fn initial_guess(&self) -> DVector<f64> {
-        self.beam.verts.clone()
+        self.armadillo.verts.clone()
     }
     fn set_all_vertices_vector(&mut self, vertices: DVector<f64>) {
-        let velocity = DAMP * ((&vertices - &self.beam.verts) / self.dt);
-        self.beam.velos = velocity;
-        self.beam.verts = vertices;
+        let velocity = DAMP * ((&vertices - &self.armadillo.verts) / self.dt);
+        self.armadillo.velos = velocity;
+        self.armadillo.verts = vertices;
     }
     fn save_to_file(&self, frame: usize) {
-        self.beam
+        self.armadillo
             .save_to_obj(format!("output/{}{}.obj", self.name, frame));
     }
     fn frame_init(&mut self) {
-        self.x_tao = &self.beam.verts + self.dt * &self.beam.velos;
+        self.x_tao = &self.armadillo.verts + self.dt * &self.armadillo.velos;
     }
 }
 
-impl Drop for BeamScenario {
+impl Drop for ArmadilloScenario {
     fn drop(&mut self) {
         unsafe {
             cholmod_free_factor(&mut self.l as *mut _, &mut self.c as *mut _);
@@ -296,7 +288,7 @@ impl Drop for BeamScenario {
 }
 
 fn main() {
-    let mut p = BeamScenario::new();
+    let mut p = ArmadilloScenario::new();
     let ls = SimpleLineSearch {
         alpha: 0.9,
         tol: 0.01,
@@ -312,12 +304,14 @@ fn main() {
             let mut h;
             let mut count = 0;
             while g.norm() > 1e-3 {
+                // println!("gnorm {}",g.norm());
                 count += 1;
                 h = p.new_hessian(&res);
                 let mut g_dense = thesis::csc::dense_convert(&mut g, &mut p.c);
                 let mut cholmod_delta = cholmod_solve(CHOLMOD_A as i32, h, &mut g_dense, &mut p.c);
 
                 let delta = thesis::csc::cholmod_dense_convert(cholmod_delta, &mut p.c);
+
                 let scalar = ls.search(&p, &res, &delta);
                 let delta = delta * scalar;
                 res -= &delta;
@@ -329,7 +323,7 @@ fn main() {
             }
             p.set_all_vertices_vector(res);
             p.save_to_file(i);
-            println!("{count}");
+            // println!("{count}");
         }
     }
     println!("{}", start.elapsed().as_secs_f32());
