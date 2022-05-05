@@ -87,8 +87,8 @@ pub trait Problem {
     fn hessian(&self, _x: &DVector<f64>) -> Option<Self::HessianType> {
         None
     }
-    fn hessian_mut(&mut self, _x: &DVector<f64>) -> Option<Self::HessianType> {
-        None
+    fn hessian_mut(&mut self, x: &DVector<f64>) -> (Option<Self::HessianType>, usize) {
+        (self.hessian(x), 0)
     }
 
     fn hessian_inverse_mut<'a>(
@@ -139,6 +139,15 @@ macro_rules! mylog {
         #[cfg(feature = "log")]
         {
             writeln!($log, "{} : {}", $infor, $value).unwrap();
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! run_when_logging {
+    ($($tokens:tt)*) => {
+        #[cfg(feature = "log")]{
+            $($tokens)*
         }
     };
 }

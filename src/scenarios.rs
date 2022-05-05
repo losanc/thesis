@@ -1,8 +1,10 @@
 use na::DVector;
 use nalgebra as na;
+use optimization::run_when_logging;
 use optimization::LineSearch;
 use optimization::LinearSolver;
 use optimization::{Problem, Solver};
+#[allow(unused_imports)]
 use std::io::Write;
 
 pub trait ScenarioProblem: Problem {
@@ -36,13 +38,21 @@ where
     LSo: LinearSolver<MatrixType = P::HessianType>,
     LSe: LineSearch<P>,
 {
-    pub fn new(p: P, s: S, lso: LSo, lse: LSe, filename: &str, comment: &str) -> Self {
-        let mut file: std::fs::File;
+    pub fn new(
+        p: P,
+        s: S,
+        lso: LSo,
+        lse: LSe,
+        #[cfg(feature = "log")] filename: &str,
+        #[cfg(feature = "log")] comment: &str,
+    ) -> Self {
         #[cfg(feature = "log")]
-        {
+        let mut file;
+
+        run_when_logging!(
             file = std::fs::File::create(filename).unwrap();
             writeln!(file, "{}", comment).unwrap();
-        }
+        );
 
         Scenario {
             problem: p,
@@ -51,18 +61,14 @@ where
             linearsolver: lso,
             ls: lse,
             #[cfg(feature = "log")]
-            file,
+            file: file,
         }
     }
 
     pub fn step(&mut self) {
         self.problem.frame_init();
         let initial_guess = self.problem.initial_guess();
-        // let start = std::time::Instant::now();
-        #[cfg(feature = "log")]
-        {
-            writeln!(self.file, "\n\nFrame: {}", self.frame).unwrap();
-        }
+        run_when_logging!(writeln!(self.file, "\nFrame: {}", self.frame).unwrap());
         let res2 = self.solver.solve::<std::fs::File>(
             &mut self.problem,
             &self.linearsolver,

@@ -3,11 +3,11 @@ use nalgebra::{DMatrix, DVector};
 use nalgebra_sparse::{CscMatrix, CsrMatrix};
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
-mod parameters2d;
-use parameters2d::*;
+pub mod beampara;
+use beampara::*;
 
-pub const FILENAME: &'static str = "beamold.txt";
-pub const COMMENT: &'static str = "original";
+pub const FILENAME: &'static str = "beam";
+pub const COMMENT: &'static str = "vanilla projected newton";
 
 pub struct BeamScenario {
     beam: Mesh2d,
@@ -48,7 +48,7 @@ impl Problem for BeamScenario {
         res += self.inertia_gradient(x);
         res += self.beam.elastic_gradient(x, &self.energy);
 
-        let mut slice = res.index_mut((0..NFIXED_VERT * DIM, 0));
+        let mut slice = res.index_mut((0..ROW * DIM, 0));
         for i in slice.iter_mut() {
             *i = 0.0;
         }
@@ -58,21 +58,21 @@ impl Problem for BeamScenario {
         self.gradient(x)
     }
 
-    fn hessian_mut(&mut self, x: &DVector<f64>) -> Option<Self::HessianType> {
+    fn hessian_mut(&mut self, x: &DVector<f64>) -> (Option<Self::HessianType>,usize) {
         // dense version of hessian matrix
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res = res + self.inertia_hessian(x);
         res += self.beam.elastic_hessian_projected(x, &self.energy);
 
-        let mut slice = res.index_mut((0..NFIXED_VERT * DIM, NFIXED_VERT * DIM..));
+        let mut slice = res.index_mut((0..ROW * DIM, ROW * DIM..));
         for i in slice.iter_mut() {
             *i = 0.0;
         }
-        let mut slice = res.index_mut((NFIXED_VERT * DIM.., 0..NFIXED_VERT * DIM));
+        let mut slice = res.index_mut((ROW * DIM.., 0..ROW * DIM));
         for i in slice.iter_mut() {
             *i = 0.0;
         }
-        Some(CsrMatrix::from(&res))
+        (Some(CsrMatrix::from(&res)),0)
     }
 
     fn hessian_inverse_mut<'a>(&'a mut self, _x: &DVector<f64>) -> &'a CscMatrix<f64> {
@@ -103,18 +103,18 @@ impl ScenarioProblem for BeamScenario {
 
 impl BeamScenario {
     pub fn new(name: &str) -> Self {
-        let mut p = plane(NFIXED_VERT, c, Some(SIZE), Some(SIZE), None);
+        let mut p = plane(ROW, COL, Some(SIZE), Some(SIZE), None);
 
         // init velocity
-        for i in 0..c {
-            for j in 0..NFIXED_VERT {
-                p.velos[DIM * (i * NFIXED_VERT + j)] =
+        for i in 0..COL {
+            for j in 0..ROW {
+                p.velos[DIM * (i * ROW + j)] =
                     -1.0 * (i as f64) * (i as f64) * (i as f64 / 20.0) * SIZE * SIZE * SIZE;
             }
         }
 
         let mut g_vec = DVector::zeros(DIM * p.n_verts);
-        for i in NFIXED_VERT..p.n_verts {
+        for i in ROW..p.n_verts {
             g_vec[DIM * i] = -9.8;
         }
         let energy = EnergyType {
@@ -150,12 +150,23 @@ fn main() {
         tol: 0.01,
         epi: 1e-7,
     };
-    let mut b = Scenario::new(problem, solver, linearsolver, linesearch, FILENAME, COMMENT);
+    let mut b = Scenario::new(
+        problem,
+        solver,
+        linearsolver,
+        linesearch,
+        #[cfg(feature = "log")]
+        &format!("output/beam/{FILENAME}_E_{E}_NU_{NU}_ROW_{ROW}_COL_{COL}_SIZE_{SIZE}.txt"),
+        #[cfg(feature = "log")]
+        &format!("{COMMENT}\nE: {E}\nNU: {NU}\nROW: {ROW}\nCOL: {COL}\nSIZE: {SIZE}"),
+    );
+
+    #[cfg(not(feature = "log"))]
     let start = std::time::Instant::now();
     for _i in 0..TOTAL_FRAME {
         println!("running frame: {}", _i);
         b.step();
     }
-    let duration = start.elapsed().as_secs_f32();
-    println!("time spent {duration}");
+    #[cfg(not(feature = "log"))]
+    println!("time spent {}", start.elapsed().as_secs_f32());
 }
