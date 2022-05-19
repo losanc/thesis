@@ -1,7 +1,9 @@
 use mesh::{armadillo, Mesh3d};
 use nalgebra::{DMatrix, DVector};
 use nalgebra_sparse::CsrMatrix;
-use optimization::{JacobianPre, LinearSolver, NewtonCG, NewtonSolver, Problem, SimpleLineSearch};
+use optimization::{
+    JacobianPre, LinearSolver, NewtonCG, NewtonSolverMut, Problem, SimpleLineSearch,
+};
 use thesis::scenarios::{Scenario, ScenarioProblem};
 mod armadillopara;
 use armadillopara::*;
@@ -52,6 +54,9 @@ impl Problem for BouncingUpdateScenario {
         }
         Some(res)
     }
+    fn gradient_mut(&mut self, x: &DVector<f64>) -> Option<DVector<f64>> {
+        self.gradient(x)
+    }
 
     fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
         let mut elastic_hessian =
@@ -64,6 +69,9 @@ impl Problem for BouncingUpdateScenario {
         }
 
         Some(self.inertia_hessian(x) + elastic_hessian)
+    }
+    fn hessian_mut(&mut self, x: &DVector<f64>) -> (Option<Self::HessianType>, usize) {
+        (self.hessian(x), 0)
     }
 
     fn hessian_inverse_mut<'a>(
@@ -86,7 +94,7 @@ impl ScenarioProblem for BouncingUpdateScenario {
     }
     fn save_to_file(&self, frame: usize) {
         self.armadillo
-            .save_to_obj(format!("output/{}{}.obj", self.name, frame));
+            .save_to_obj(format!("output/mesh/{}{}.obj", self.name, frame));
     }
     fn frame_init(&mut self) {
         self.x_tao = &self.armadillo.verts + self.dt * &self.armadillo.velos;
@@ -126,7 +134,7 @@ impl BouncingUpdateScenario {
 fn main() {
     let problem = BouncingUpdateScenario::new("armadillotru");
 
-    let solver = NewtonSolver {
+    let solver = NewtonSolverMut {
         max_iter: 300,
         epi: 1e-3,
     };
@@ -136,7 +144,18 @@ fn main() {
         tol: 1e-5,
         epi: 0.0,
     };
-    let mut b = Scenario::new(problem, solver, linearsolver, linesearch, FILENAME, COMMENT);
+    let mut b = Scenario::new(
+        problem,
+        solver,
+        linearsolver,
+        linesearch,
+        #[cfg(feature = "log")]
+        format!("output/log/{FILENAME}_E_{E}_NU_{NU}/"),
+        #[cfg(feature = "log")]
+        format!("ACTIVESETEPI_{ACTIVE_SET_EPI}_NEIGH_{NEIGHBOR_LEVEL}_.txt"),
+        #[cfg(feature = "log")]
+        format!("{COMMENT}\nE: {E}\nNU: {NU}\nACTIVE_SET_EPI: {ACTIVE_SET_EPI}\nNEIGH: {NEIGHBOR_LEVEL}")
+    );
 
     let start = std::time::Instant::now();
     for _i in 0..TOTAL_FRAME {

@@ -43,14 +43,16 @@ where
         s: S,
         lso: LSo,
         lse: LSe,
-        #[cfg(feature = "log")] filename: &str,
-        #[cfg(feature = "log")] comment: &str,
+        #[cfg(feature = "log")] dirname: String,
+        #[cfg(feature = "log")] filename: String,
+        #[cfg(feature = "log")] comment: String,
     ) -> Self {
         #[cfg(feature = "log")]
         let mut file;
 
         run_when_logging!(
-            file = std::fs::File::create(filename).unwrap();
+            std::fs::create_dir_all(&dirname).unwrap();
+            file = std::fs::File::create(dirname+"/"+&filename).unwrap();
             writeln!(file, "{}", comment).unwrap();
         );
 

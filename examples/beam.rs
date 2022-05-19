@@ -58,7 +58,7 @@ impl Problem for BeamScenario {
         self.gradient(x)
     }
 
-    fn hessian_mut(&mut self, x: &DVector<f64>) -> (Option<Self::HessianType>,usize) {
+    fn hessian_mut(&mut self, x: &DVector<f64>) -> (Option<Self::HessianType>, usize) {
         // dense version of hessian matrix
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res = res + self.inertia_hessian(x);
@@ -72,7 +72,7 @@ impl Problem for BeamScenario {
         for i in slice.iter_mut() {
             *i = 0.0;
         }
-        (Some(CsrMatrix::from(&res)),0)
+        (Some(CsrMatrix::from(&res)), self.beam.n_prims)
     }
 
     fn hessian_inverse_mut<'a>(&'a mut self, _x: &DVector<f64>) -> &'a CscMatrix<f64> {
@@ -156,9 +156,11 @@ fn main() {
         linearsolver,
         linesearch,
         #[cfg(feature = "log")]
-        &format!("output/beam/{FILENAME}_E_{E}_NU_{NU}_ROW_{ROW}_COL_{COL}_SIZE_{SIZE}.txt"),
+        format!("output/log/{FILENAME}_E_{E}_NU_{NU}_ROW_{ROW}_DENSITY_{DENSITY}_COL_{COL}_SIZE_{SIZE}/"),
         #[cfg(feature = "log")]
-        &format!("{COMMENT}\nE: {E}\nNU: {NU}\nROW: {ROW}\nCOL: {COL}\nSIZE: {SIZE}"),
+        format!("ACTIVESETEPI_0_NEIGH_0_.txt"),
+        #[cfg(feature = "log")]
+        format!("{COMMENT}\nE: {E}\nNU: {NU}\nROW: {ROW}\nCOL: {COL}\nDENSITY: {DENSITY}\nSIZE: {SIZE}\nACTIVE_SET_EPI: {ACTIVE_SET_EPI}\nNEIGH: {NEIGHBOR_LEVEL}"),
     );
 
     #[cfg(not(feature = "log"))]

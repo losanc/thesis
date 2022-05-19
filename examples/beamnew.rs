@@ -1,4 +1,3 @@
-use autodiff::Hessian;
 use mesh::*;
 use nalgebra::{DMatrix, DVector, SMatrix, SVector};
 use nalgebra_sparse::{CscMatrix, CsrMatrix};
@@ -7,8 +6,10 @@ use thesis::scenarios::{Scenario, ScenarioProblem};
 pub mod beampara;
 use beampara::*;
 
-pub const FILENAME: &'static str = "beamnew";
+pub const FILENAME: &'static str = "beamflip";
 pub const COMMENT: &'static str = "modified";
+
+pub const MODIFICATION: HessianModification = HessianModification::RemoveMinusEigenvalues;
 
 pub struct BeamScenario {
     beam: Mesh2d,
@@ -21,6 +22,7 @@ pub struct BeamScenario {
     active_set: std::collections::HashSet<usize>,
     hessian_list: Vec<SMatrix<f64, CO_NUM, CO_NUM>>,
     init_hessian: DMatrix<f64>,
+    frame: usize,
 }
 impl BeamScenario {
     fn inertia_apply(&self, x: &DVector<f64>) -> f64 {
@@ -77,7 +79,9 @@ impl Problem for BeamScenario {
         // dense version of hessian matrix
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
         res = res + self.inertia_hessian(x);
-        res += self.beam.elastic_hessian(x, &self.energy);
+        res += self
+            .beam
+            .elastic_hessian(x, &self.energy, HessianModification::NoModification);
 
         let mut slice = res.index_mut((0..ROW * DIM, ROW * DIM..));
         for i in slice.iter_mut() {
@@ -111,9 +115,9 @@ impl Problem for BeamScenario {
                 .flatten()
                 .collect::<std::collections::HashSet<usize>>();
         }
-
-        let assem_count = update_triangle_list.len();
-        println!("{}   {}", update_triangle_list.len(), self.beam.n_prims);
+        let mut update_triangle_list = update_triangle_list.into_iter().collect::<Vec<_>>();
+        update_triangle_list.sort();
+        let assem_count =  update_triangle_list.len();
 
         for i in update_triangle_list {
             let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
@@ -123,19 +127,17 @@ impl Problem for BeamScenario {
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = x[*i]);
-            let energy: Hessian<CO_NUM> = self.beam.prim_energy(i, &self.energy, vert_vec);
-            let energy_hessian = energy.hessian();
 
-            let mut eigendecomposition = energy_hessian.symmetric_eigen();
-            for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
-                if *eigenvalue < 0.0 {
-                    *eigenvalue = 0.0;
-                }
-            }
-            let energy_hessian = eigendecomposition.recompose();
+            let energy_hessian = self.beam.prim_projected_hessian(
+                i,
+                &self.energy,
+                vert_vec,
+                MODIFICATION,
+            );
 
             let old_energy_hessian = self.hessian_list[i];
             let diff = energy_hessian - old_energy_hessian;
+
             // update global hessian
             for i in 0..CO_NUM {
                 for j in 0..CO_NUM {
@@ -165,29 +167,34 @@ impl Problem for BeamScenario {
 }
 
 impl ScenarioProblem for BeamScenario {
+    #[inline]
     fn initial_guess(&self) -> DVector<f64> {
         self.beam.verts.clone()
     }
+    #[inline]
     fn set_all_vertices_vector(&mut self, vertices: DVector<f64>) {
         let velocity = DAMP * ((&vertices - &self.beam.verts) / self.dt);
         self.beam.velos = velocity;
         self.beam.verts = vertices;
     }
+    #[inline]
     fn save_to_file(&self, frame: usize) {
         self.beam
-            .save_to_obj(format!("output/{}{}.obj", self.name, frame));
+            .save_to_obj(format!("output/mesh/{}{}.obj", self.name, frame));
     }
+    #[inline]
     fn frame_init(&mut self) {
         self.x_tao = &self.beam.verts + self.dt * &self.beam.velos;
     }
+    #[inline]
     fn frame_end(&mut self) {
-        // self.frame+=1;
+        self.frame += 1;
     }
 }
 
 impl BeamScenario {
     pub fn new(name: &str) -> Self {
-        let mut p = plane(ROW, COL, Some(SIZE), Some(SIZE), None);
+        let mut p = plane(ROW, COL, Some(SIZE), Some(SIZE), Some(DENSITY));
 
         // init velocity
         for i in 0..COL {
@@ -208,7 +215,7 @@ impl BeamScenario {
 
         let mass = DMatrix::from_diagonal(&p.masss) / (DT * DT);
 
-        let init_hessian = p.elastic_hessian_projected(&p.verts, &energy);
+        let init_hessian = p.elastic_hessian(&p.verts, &energy, MODIFICATION);
 
         let mut old_hessian_list = Vec::<SMatrix<f64, CO_NUM, CO_NUM>>::new();
         for i in 0..p.n_prims {
@@ -219,16 +226,7 @@ impl BeamScenario {
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = p.verts[*i]);
-            let energy: Hessian<CO_NUM> = p.prim_energy(i, &energy, vert_vec);
-
-            let energy_hessian = energy.hessian();
-            let mut eigendecomposition = energy_hessian.symmetric_eigen();
-            for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
-                if *eigenvalue < 0.0 {
-                    *eigenvalue = 0.0;
-                }
-            }
-            let energy_hessian = eigendecomposition.recompose();
+            let energy_hessian = p.prim_projected_hessian(i, &energy, vert_vec, MODIFICATION);
             old_hessian_list.push(energy_hessian);
         }
 
@@ -243,6 +241,7 @@ impl BeamScenario {
             active_set: std::collections::HashSet::<usize>::new(),
             hessian_list: old_hessian_list,
             init_hessian,
+            frame: 0,
         };
         scenario
     }
@@ -252,7 +251,7 @@ fn main() {
     let problem = BeamScenario::new("beamnew");
 
     let solver = NewtonSolverMut {
-        max_iter: 500,
+        max_iter: 1000,
         epi: 1e-3,
     };
     // let linearsolver = CscCholeskySolver {};
@@ -268,9 +267,11 @@ fn main() {
         linearsolver,
         linesearch,
         #[cfg(feature = "log")]
-        &format!("output/beam/{FILENAME}_E_{E}_NU_{NU}_ROW_{ROW}_COL_{COL}_SIZE_{SIZE}_ACTIVE_SET_EPI{ACTIVE_SET_EPI}_NEIGH_{NEIGHBOR_LEVEL}.txt"),
+        format!("output/log/{FILENAME}_E_{E}_NU_{NU}_ROW_{ROW}_DENSITY_{DENSITY}_COL_{COL}_SIZE_{SIZE}/"),
         #[cfg(feature = "log")]
-        &format!("{COMMENT}\nE: {E}\nNU: {NU}\nROW: {ROW}\nCOL: {COL}\nSIZE: {SIZE}\nACTIVE_SET_EPI: {ACTIVE_SET_EPI}\nNEIGH: {NEIGHBOR_LEVEL}"),
+        format!("ACTIVESETEPI_{ACTIVE_SET_EPI}_NEIGH_{NEIGHBOR_LEVEL}_.txt"),
+        #[cfg(feature = "log")]
+        format!("{COMMENT}\nE: {E}\nNU: {NU}\nROW: {ROW}\nCOL: {COL}\nDENSITY: {DENSITY}\nSIZE: {SIZE}\nACTIVE_SET_EPI: {ACTIVE_SET_EPI}\nNEIGH: {NEIGHBOR_LEVEL}"),
     );
     #[cfg(not(feature = "log"))]
     let start = std::time::Instant::now();

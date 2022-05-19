@@ -74,38 +74,29 @@ impl Problem for BouncingUpdateScenario {
         Some(res)
     }
 
-    // fn hessian(&self, x: &DVector<f64>) -> Option<Self::HessianType> {
-    //     // dense version of hessian matrix
-    //     let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
-    //     res = res + self.inertia_hessian(x);
-    //     res += self.armadillo.elastic_hessian_projected(x, &self.energy);
-
-    //     let mut slice = res.index_mut((0..NFIXED_VERT * DIM, NFIXED_VERT * DIM..));
-    //     for i in slice.iter_mut() {
-    //         *i = 0.0;
-    //     }
-    //     let mut slice = res.index_mut((NFIXED_VERT * DIM.., 0..NFIXED_VERT * DIM));
-    //     for i in slice.iter_mut() {
-    //         *i = 0.0;
-    //     }
-    //     Some(CsrMatrix::from(&res))
-    // }
-
-    fn hessian_mut(&mut self, x: &DVector<f64>) -> Option<Self::HessianType> {
+    fn hessian_mut(&mut self, x: &DVector<f64>) -> (Option<Self::HessianType>, usize) {
         // dense version of hessian matrix
-
-        let update_triangle_list = self
+        let mut update_triangle_list = self
             .active_set
             .iter()
             .map(|x| self.armadillo.vert_connected_prim_indices[*x].clone())
-            // .flatten()
-            // .map(|x| self.beam.prim_connected_vert_indices[x].clone())
-            // .flatten()
-            // .map(|x| self.beam.vert_connected_prim_indices[x].clone())
             .flatten()
             .collect::<std::collections::HashSet<usize>>();
 
-        for i in update_triangle_list {
+        for _ in 0..NEIGHBOR_LEVEL {
+            update_triangle_list = update_triangle_list
+                .iter()
+                .map(|x| self.armadillo.prim_connected_vert_indices[*x].clone())
+                .flatten()
+                .map(|x| self.armadillo.vert_connected_prim_indices[x].clone())
+                .flatten()
+                .collect::<std::collections::HashSet<usize>>();
+        }
+        let mut update_triangle_list = update_triangle_list.into_iter().collect::<Vec<_>>();
+        update_triangle_list.sort();
+
+        for i in &update_triangle_list {
+            let i = *i;
             let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
             let indices = self.armadillo.get_indices(i);
 
@@ -119,7 +110,7 @@ impl Problem for BouncingUpdateScenario {
             let mut eigendecomposition = energy_hessian.symmetric_eigen();
             for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
                 if *eigenvalue < 0.0 {
-                    *eigenvalue = 0.0;
+                    *eigenvalue = -*eigenvalue;
                 }
             }
             let energy_hessian = eigendecomposition.recompose();
@@ -144,7 +135,10 @@ impl Problem for BouncingUpdateScenario {
             }
         }
 
-        Some(self.inertia_hessian(x) + sparse)
+        (
+            Some(self.inertia_hessian(x) + sparse),
+            update_triangle_list.len(),
+        )
     }
 
     fn hessian_inverse_mut<'a>(
@@ -166,7 +160,7 @@ impl ScenarioProblem for BouncingUpdateScenario {
     }
     fn save_to_file(&self, frame: usize) {
         self.armadillo
-            .save_to_obj(format!("output/{}{}.obj", self.name, frame));
+            .save_to_obj(format!("output/mesh/{}{}.obj", self.name, frame));
     }
     fn frame_init(&mut self) {
         self.x_tao = &self.armadillo.verts + self.dt * &self.armadillo.velos;
@@ -207,7 +201,7 @@ impl BouncingUpdateScenario {
             let mut eigendecomposition = energy_hessian.symmetric_eigen();
             for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
                 if *eigenvalue < 0.0 {
-                    *eigenvalue = 0.0;
+                    *eigenvalue = -*eigenvalue;
                 }
             }
             let energy_hessian = eigendecomposition.recompose();
@@ -246,7 +240,18 @@ fn main() {
         tol: 1e-5,
         epi: 0.0,
     };
-    let mut b = Scenario::new(problem, solver, linearsolver, linesearch, FILENAME, COMMENT);
+    let mut b = Scenario::new(
+        problem,
+        solver,
+        linearsolver,
+        linesearch,
+        #[cfg(feature = "log")]
+        format!("output/log/{FILENAME}_E_{E}_NU_{NU}/"),
+        #[cfg(feature = "log")]
+        format!("ACTIVESETEPI_{ACTIVE_SET_EPI}_NEIGH_{NEIGHBOR_LEVEL}_.txt"),
+        #[cfg(feature = "log")]
+        format!("{COMMENT}\nE: {E}\nNU: {NU}\nACTIVE_SET_EPI: {ACTIVE_SET_EPI}\nNEIGH: {NEIGHBOR_LEVEL}")
+        );
 
     let start = std::time::Instant::now();
     for _i in 0..TOTAL_FRAME {

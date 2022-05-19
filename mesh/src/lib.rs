@@ -45,3 +45,10 @@ pub type StVenantVirchhoff2d = StVenantVirchhoff<2>;
 pub type StVenantVirchhoff3d = StVenantVirchhoff<3>;
 pub type NeoHookean2d = NeoHookean<2>;
 pub type NeoHookean3d = NeoHookean<3>;
+
+#[derive(Debug, Clone, Copy)]
+pub enum HessianModification {
+    NoModification,
+    RemoveMinusEigenvalues,
+    FlipMinusEigenvalues,
+}
