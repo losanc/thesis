@@ -28,7 +28,7 @@ pub struct Scenario<
     linearsolver: LSo,
     ls: LSe,
     #[cfg(feature = "log")]
-    file: std::fs::File,
+    buf_writter: std::io::BufWriter<std::fs::File>,
 }
 
 impl<P, S, LSo, LSe> Scenario<P, S, LSo, LSe>
@@ -48,12 +48,15 @@ where
         #[cfg(feature = "log")] comment: String,
     ) -> Self {
         #[cfg(feature = "log")]
-        let mut file;
+        let file;
+        #[cfg(feature = "log")]
+        let mut buf_writter;
 
         run_when_logging!(
             std::fs::create_dir_all(&dirname).unwrap();
             file = std::fs::File::create(dirname+"/"+&filename).unwrap();
-            writeln!(file, "{}", comment).unwrap();
+            buf_writter = std::io::BufWriter::new(file);
+            writeln!(buf_writter, "{}", comment).unwrap();
         );
 
         Scenario {
@@ -63,22 +66,27 @@ where
             linearsolver: lso,
             ls: lse,
             #[cfg(feature = "log")]
-            file: file,
+            buf_writter,
         }
     }
 
     pub fn step(&mut self) {
         self.problem.frame_init();
         let initial_guess = self.problem.initial_guess();
-        run_when_logging!(writeln!(self.file, "\nFrame: {}", self.frame).unwrap());
-        let res2 = self.solver.solve::<std::fs::File>(
+        run_when_logging!(writeln!(self.buf_writter, "\nFrame: {}", self.frame).unwrap());
+        let res2 = self.solver.solve::<std::io::BufWriter<std::fs::File>>(
             &mut self.problem,
             &self.linearsolver,
             &self.ls,
             &initial_guess,
             #[cfg(feature = "log")]
-            &mut self.file,
+            &mut self.buf_writter,
         );
+
+        #[cfg(feature = "log")]
+        {
+            self.buf_writter.flush().unwrap();
+        }
 
         self.problem.set_all_vertices_vector(res2);
         self.frame += 1;
