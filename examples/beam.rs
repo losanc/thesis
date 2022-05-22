@@ -10,7 +10,6 @@ pub const DIM: usize = 2;
 pub const CO_NUM: usize = DIM * (DIM + 1);
 pub type EnergyType = NeoHookean2d;
 
-pub const MODIFICATION: HessianModification = HessianModification::NoModification;
 
 pub struct BeamScenario {
     beam: Mesh2d,
@@ -28,6 +27,7 @@ pub struct BeamScenario {
     neighbor_level: usize,
     active_set_epi: f64,
     n_fixed: usize,
+    modification: HessianModification,
 }
 impl BeamScenario {
     fn inertia_apply(&self, x: &DVector<f64>) -> f64 {
@@ -135,7 +135,7 @@ impl Problem for BeamScenario {
 
             let energy_hessian =
                 self.beam
-                    .prim_projected_hessian(i, &self.energy, vert_vec, MODIFICATION);
+                    .prim_projected_hessian(i, &self.energy, vert_vec, self.modification);
 
             let old_energy_hessian = self.hessian_list[i];
             let diff = energy_hessian - old_energy_hessian;
@@ -211,6 +211,23 @@ impl BeamScenario {
         let ACTIVE_SET_EPI = args[9].parse::<f64>().unwrap();
         let NEIGHBOR_LEVEL = args[10].parse::<usize>().unwrap();
         let FILENAME = &args[11];
+        let MODIFICATION = &args[14];
+        let modi: HessianModification;
+        match MODIFICATION.as_str() {
+            "no" =>{
+                modi = HessianModification::NoModification;
+            }
+            "flip" =>{
+                modi = HessianModification::FlipMinusEigenvalues;
+            }
+            "remove" =>{
+                modi = HessianModification::RemoveMinusEigenvalues;
+            }
+            _ =>{
+                panic!("unknown ");
+            }
+            
+        }
 
         let mut p = plane(ROW, COL, Some(SIZE), Some(SIZE), Some(DENSITY));
 
@@ -233,7 +250,7 @@ impl BeamScenario {
 
         let mass = DMatrix::from_diagonal(&p.masss) / (DT * DT);
 
-        let init_hessian = p.elastic_hessian(&p.verts, &energy, MODIFICATION);
+        let init_hessian = p.elastic_hessian(&p.verts, &energy, modi);
 
         let mut old_hessian_list = Vec::<SMatrix<f64, CO_NUM, CO_NUM>>::new();
         for i in 0..p.n_prims {
@@ -244,7 +261,7 @@ impl BeamScenario {
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = p.verts[*i]);
-            let energy_hessian = p.prim_projected_hessian(i, &energy, vert_vec, MODIFICATION);
+            let energy_hessian = p.prim_projected_hessian(i, &energy, vert_vec, modi);
             old_hessian_list.push(energy_hessian);
         }
 
@@ -264,6 +281,7 @@ impl BeamScenario {
             neighbor_level: NEIGHBOR_LEVEL,
             active_set_epi: ACTIVE_SET_EPI,
             n_fixed: ROW,
+            modification:modi
         };
         scenario
     }
@@ -289,6 +307,7 @@ fn main() {
     let FILENAME = &args[11];
     let COMMENT = &args[12];
     let TOTAL_FRAME = args[13].parse::<usize>().unwrap();
+    let MODIFICATION = &args[14];
 
     let problem = BeamScenario::new("beamnew");
 
@@ -311,9 +330,9 @@ fn main() {
         #[cfg(feature = "log")]
         format!("output/log/{FILENAME}_E_{E}_NU_{NU}_ROW_{ROW}_DENSITY_{DENSITY}_COL_{COL}_SIZE_{SIZE}/"),
         #[cfg(feature = "log")]
-        format!("ACTIVESETEPI_{ACTIVE_SET_EPI}_NEIGH_{NEIGHBOR_LEVEL}_.txt"),
+        format!("ACTIVESETEPI_{:.2}_NEIGH_{:2}_.txt",ACTIVE_SET_EPI,NEIGHBOR_LEVEL),
         #[cfg(feature = "log")]
-        format!("{COMMENT}\nE: {E}\nNU: {NU}\nROW: {ROW}\nCOL: {COL}\nDENSITY: {DENSITY}\nSIZE: {SIZE}\nACTIVE_SET_EPI: {ACTIVE_SET_EPI}\nNEIGH: {NEIGHBOR_LEVEL}"),
+        format!("{COMMENT}\nE: {E}\nNU: {NU}\nROW: {ROW}\nCOL: {COL}\nDENSITY: {DENSITY}\nSIZE: {SIZE}\nACTIVE_SET_EPI: {ACTIVE_SET_EPI}\nNEIGH: {NEIGHBOR_LEVEL}\nMODIFICATION: {MODIFICATION}\n"),
     );
     #[cfg(not(feature = "log"))]
     let start = std::time::Instant::now();
