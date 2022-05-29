@@ -10,7 +10,6 @@ pub const DIM: usize = 2;
 pub const CO_NUM: usize = DIM * (DIM + 1);
 pub type EnergyType = NeoHookean2d;
 
-
 pub struct BeamScenario {
     beam: Mesh2d,
     dt: f64,
@@ -214,19 +213,18 @@ impl BeamScenario {
         let MODIFICATION = &args[14];
         let modi: HessianModification;
         match MODIFICATION.as_str() {
-            "no" =>{
+            "no" => {
                 modi = HessianModification::NoModification;
             }
-            "flip" =>{
+            "flip" => {
                 modi = HessianModification::FlipMinusEigenvalues;
             }
-            "remove" =>{
+            "remove" => {
                 modi = HessianModification::RemoveMinusEigenvalues;
             }
-            _ =>{
+            _ => {
                 panic!("unknown ");
             }
-            
         }
 
         let mut p = plane(ROW, COL, Some(SIZE), Some(SIZE), Some(DENSITY));
@@ -281,7 +279,7 @@ impl BeamScenario {
             neighbor_level: NEIGHBOR_LEVEL,
             active_set_epi: ACTIVE_SET_EPI,
             n_fixed: ROW,
-            modification:modi
+            modification: modi,
         };
         scenario
     }

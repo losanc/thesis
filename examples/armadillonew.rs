@@ -1,13 +1,15 @@
 use autodiff::Hessian;
+use mesh::HessianModification;
 use mesh::{armadillo, Mesh3d};
 use nalgebra::{DMatrix, DVector, SMatrix, SVector};
 use nalgebra_sparse::*;
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
-mod armadillopara;
-use armadillopara::*;
-const FILENAME: &'static str = "armadillo_projected_fast.txt";
-const COMMENT: &'static str = "naive projected newton";
+
+pub const DIM: usize = 3;
+pub const CO_NUM: usize = 12;
+pub const NFIXED_VERT: usize = 20;
+type EnergyType = mesh::NeoHookean3d;
 
 pub struct BouncingUpdateScenario {
     armadillo: Mesh3d,
@@ -21,6 +23,10 @@ pub struct BouncingUpdateScenario {
     active_set: std::collections::HashSet<usize>,
     hessian_list: Vec<SMatrix<f64, CO_NUM, CO_NUM>>,
     init_hessian: DMatrix<f64>,
+    active_set_epi: f64,
+    neighbor_level: usize,
+    damp: f64,
+    modification: HessianModification,
 }
 impl BouncingUpdateScenario {
     fn inertia_apply(&self, x: &DVector<f64>) -> f64 {
@@ -64,7 +70,7 @@ impl Problem for BouncingUpdateScenario {
         // reset active set
         {
             self.active_set.clear();
-            let boundary = ACTIVE_SET_EPI * res.amax();
+            let boundary = self.active_set_epi * res.amax();
             res.iter().enumerate().for_each(|(i, x)| {
                 if x.abs() > boundary {
                     self.active_set.insert(i / DIM);
@@ -83,7 +89,7 @@ impl Problem for BouncingUpdateScenario {
             .flatten()
             .collect::<std::collections::HashSet<usize>>();
 
-        for _ in 0..NEIGHBOR_LEVEL {
+        for _ in 0..self.neighbor_level {
             update_triangle_list = update_triangle_list
                 .iter()
                 .map(|x| self.armadillo.prim_connected_vert_indices[*x].clone())
@@ -104,16 +110,9 @@ impl Problem for BouncingUpdateScenario {
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = x[*i]);
-            let energy: Hessian<CO_NUM> = self.armadillo.prim_energy(i, &self.energy, vert_vec);
-            let energy_hessian = energy.hessian();
-
-            let mut eigendecomposition = energy_hessian.symmetric_eigen();
-            for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
-                if *eigenvalue < 0.0 {
-                    *eigenvalue = -*eigenvalue;
-                }
-            }
-            let energy_hessian = eigendecomposition.recompose();
+            let energy_hessian =
+                self.armadillo
+                    .prim_projected_hessian(i, &self.energy, vert_vec, self.modification);
 
             let old_energy_hessian = self.hessian_list[i];
             let diff = energy_hessian - old_energy_hessian;
@@ -154,7 +153,7 @@ impl ScenarioProblem for BouncingUpdateScenario {
         self.armadillo.verts.clone()
     }
     fn set_all_vertices_vector(&mut self, vertices: DVector<f64>) {
-        let velocity = DAMP * ((&vertices - &self.armadillo.verts) / self.dt);
+        let velocity = self.damp * ((&vertices - &self.armadillo.verts) / self.dt);
         self.armadillo.velos = velocity;
         self.armadillo.verts = vertices;
     }
@@ -172,6 +171,40 @@ impl ScenarioProblem for BouncingUpdateScenario {
 
 impl BouncingUpdateScenario {
     pub fn new(name: &str) -> Self {
+        let args: Vec<String> = std::env::args().collect();
+
+        let E = args[1].parse::<f64>().unwrap();
+        let NU = args[2].parse::<f64>().unwrap();
+        let MIU = E / (2.0 * (1.0 + NU));
+        let LAMBDA = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
+        let DT = args[3].parse::<f64>().unwrap();
+        let DENSITY = args[4].parse::<f64>().unwrap();
+        let DAMP = args[5].parse::<f64>().unwrap();
+
+        let ACTIVE_SET_EPI = args[6].parse::<f64>().unwrap();
+        let NEIGHBOR_LEVEL = args[7].parse::<usize>().unwrap();
+
+        let FILENAME = &args[8];
+        let COMMENT = &args[9];
+        let TOTAL_FRAME = args[10].parse::<usize>().unwrap();
+        let MODIFICATION = &args[11];
+
+        let modi: HessianModification;
+        match MODIFICATION.as_str() {
+            "no" => {
+                modi = HessianModification::NoModification;
+            }
+            "flip" => {
+                modi = HessianModification::FlipMinusEigenvalues;
+            }
+            "remove" => {
+                modi = HessianModification::RemoveMinusEigenvalues;
+            }
+            _ => {
+                panic!("unknown ");
+            }
+        }
+
         let p = armadillo();
         let mut g_vec = DVector::zeros(DIM * p.n_verts);
         for i in NFIXED_VERT..p.n_verts {
@@ -184,7 +217,7 @@ impl BouncingUpdateScenario {
 
         let mass = DMatrix::from_diagonal(&p.masss) / (DT * DT);
 
-        let init_hessian = p.elastic_hessian_projected(&p.verts, &energy);
+        let init_hessian = p.elastic_hessian(&p.verts, &energy, modi);
 
         let mut old_hessian_list = Vec::<SMatrix<f64, CO_NUM, CO_NUM>>::new();
         for i in 0..p.n_prims {
@@ -195,16 +228,7 @@ impl BouncingUpdateScenario {
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = p.verts[*i]);
-            let energy: Hessian<CO_NUM> = p.prim_energy(i, &energy, vert_vec);
-
-            let energy_hessian = energy.hessian();
-            let mut eigendecomposition = energy_hessian.symmetric_eigen();
-            for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
-                if *eigenvalue < 0.0 {
-                    *eigenvalue = -*eigenvalue;
-                }
-            }
-            let energy_hessian = eigendecomposition.recompose();
+            let energy_hessian = p.prim_projected_hessian(i, &energy, vert_vec, modi);
             old_hessian_list.push(energy_hessian);
         }
 
@@ -221,11 +245,33 @@ impl BouncingUpdateScenario {
             init_hessian,
             active_set: std::collections::HashSet::<usize>::new(),
             hessian_list: old_hessian_list,
+            damp: DAMP,
+            active_set_epi: ACTIVE_SET_EPI,
+            neighbor_level: NEIGHBOR_LEVEL,
+            modification: modi,
         }
     }
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+
+    let E = args[1].parse::<f64>().unwrap();
+    let NU = args[2].parse::<f64>().unwrap();
+    // let MIU = E / (2.0 * (1.0 + NU));
+    // let LAMBDA = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
+    // let DT = args[3].parse::<f64>().unwrap();
+    let DENSITY = args[4].parse::<f64>().unwrap();
+    // let DAMP = args[5].parse::<f64>().unwrap();
+
+    let ACTIVE_SET_EPI = args[6].parse::<f64>().unwrap();
+    let NEIGHBOR_LEVEL = args[7].parse::<usize>().unwrap();
+
+    let FILENAME = &args[8];
+    let COMMENT = &args[9];
+    let TOTAL_FRAME = args[10].parse::<usize>().unwrap();
+    let MODIFICATION = &args[11];
+
     let problem = BouncingUpdateScenario::new("armadillonew");
 
     let solver = NewtonSolverMut {
@@ -246,7 +292,7 @@ fn main() {
         linearsolver,
         linesearch,
         #[cfg(feature = "log")]
-        format!("output/log/{FILENAME}_E_{E}_NU_{NU}/"),
+        format!("output/log/{FILENAME}_E_{E}_NU_{NU}}_DENSITY_{DENSITY}/"),
         #[cfg(feature = "log")]
         format!("ACTIVESETEPI_{ACTIVE_SET_EPI}_NEIGH_{NEIGHBOR_LEVEL}_.txt"),
         #[cfg(feature = "log")]

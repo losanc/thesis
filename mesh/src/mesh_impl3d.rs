@@ -10,6 +10,7 @@ use std::io::Write;
 use std::path::Path;
 
 use crate::Energy;
+use crate::HessianModification;
 use crate::Mesh3d;
 impl Mesh3d {
     pub fn save_to_obj<P: AsRef<Path>>(&self, path: P) {
@@ -149,7 +150,12 @@ impl Mesh3d {
         res
     }
 
-    pub fn elastic_hessian<E: Energy<12, 3>>(&self, x: &DVector<f64>, energy: &E) -> DMatrix<f64> {
+    pub fn elastic_hessian<E: Energy<12, 3>>(
+        &self,
+        x: &DVector<f64>,
+        energy: &E,
+        modification: HessianModification,
+    ) -> DMatrix<f64> {
         let mut res = DMatrix::zeros(x.len(), x.len());
         for i in 0..self.n_prims {
             let indices = self.get_indices(i);
@@ -159,7 +165,30 @@ impl Mesh3d {
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = x[*i]);
             let energy: Hessian<12> = self.prim_energy(i, energy, vert_vec);
-            let small_hessian = energy.hessian();
+            let small_hessian;
+            match modification {
+                HessianModification::NoModification => small_hessian = energy.hessian(),
+                HessianModification::RemoveMinusEigenvalues => {
+                    let hessian = energy.hessian();
+                    let mut eigendecom = hessian.symmetric_eigen();
+                    for eigenvalue in eigendecom.eigenvalues.iter_mut() {
+                        if *eigenvalue < 0.0 {
+                            *eigenvalue = 0.0;
+                        }
+                    }
+                    small_hessian = eigendecom.recompose();
+                }
+                HessianModification::FlipMinusEigenvalues => {
+                    let hessian = energy.hessian();
+                    let mut eigendecom = hessian.symmetric_eigen();
+                    for eigenvalue in eigendecom.eigenvalues.iter_mut() {
+                        if *eigenvalue < 0.0 {
+                            *eigenvalue *= -1.0;
+                        }
+                    }
+                    small_hessian = eigendecom.recompose();
+                }
+            }
             for i in 0..12 {
                 for j in 0..12 {
                     res[(indices[i], indices[j])] += small_hessian[(i, j)];
@@ -174,17 +203,36 @@ impl Mesh3d {
         i: usize,
         energy: &E,
         vert_vec: SVector<f64, 12>,
+        modification: HessianModification,
     ) -> SMatrix<f64, 12, 12> {
         let energy: Hessian<12> = self.prim_energy(i, energy, vert_vec);
-        let small_hessian = energy.hessian();
-        let mut eigendecomposition = small_hessian.symmetric_eigen();
-        for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
-            if *eigenvalue < 0.0 {
-                *eigenvalue = 0.0;
+        match modification {
+            HessianModification::NoModification => {
+                return energy.hessian();
+            }
+            HessianModification::RemoveMinusEigenvalues => {
+                let small_hessian = energy.hessian();
+
+                let mut eigendecomposition = small_hessian.symmetric_eigen();
+                for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
+                    if *eigenvalue < 0.0 {
+                        *eigenvalue = 0.0;
+                    }
+                }
+                return eigendecomposition.recompose();
+            }
+            HessianModification::FlipMinusEigenvalues => {
+                let small_hessian = energy.hessian();
+
+                let mut eigendecomposition = small_hessian.symmetric_eigen();
+                for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
+                    if *eigenvalue < 0.0 {
+                        *eigenvalue *= -1.0;
+                    }
+                }
+                return eigendecomposition.recompose();
             }
         }
-        let small_hessian = eigendecomposition.recompose();
-        small_hessian
     }
 
     pub fn elastic_hessian_projected<E: Energy<12, 3>>(
