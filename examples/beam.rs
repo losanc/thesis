@@ -307,6 +307,8 @@ fn main() {
     let TOTAL_FRAME = args[13].parse::<usize>().unwrap();
     let MODIFICATION = &args[14];
 
+    let precision = args[15].parse::<usize>().unwrap();
+
     let problem = BeamScenario::new("beamnew");
 
     let solver = NewtonSolverMut {
@@ -328,7 +330,7 @@ fn main() {
         #[cfg(feature = "log")]
         format!("output/log/{FILENAME}_E_{E}_NU_{NU}_ROW_{ROW}_DENSITY_{DENSITY}_COL_{COL}_SIZE_{SIZE}/"),
         #[cfg(feature = "log")]
-        format!("ACTIVESETEPI_{:.2}_NEIGH_{:02}_.txt",ACTIVE_SET_EPI,NEIGHBOR_LEVEL),
+        format!("ACTIVESETEPI_{:.precision$}_NEIGH_{:02}_.txt",ACTIVE_SET_EPI,NEIGHBOR_LEVEL),
         #[cfg(feature = "log")]
         format!("{COMMENT}\nE: {E}\nNU: {NU}\nROW: {ROW}\nCOL: {COL}\nDENSITY: {DENSITY}\nSIZE: {SIZE}\nACTIVE_SET_EPI: {ACTIVE_SET_EPI}\nNEIGH: {NEIGHBOR_LEVEL}\nMODIFICATION: {MODIFICATION}\n"),
     );

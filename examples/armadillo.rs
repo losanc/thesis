@@ -273,6 +273,8 @@ fn main() {
     let TOTAL_FRAME = args[10].parse::<usize>().unwrap();
     let MODIFICATION = &args[11];
 
+    let precision = args[12].parse::<usize>().unwrap();
+
     let problem = BouncingUpdateScenario::new("armadillonew");
 
     let solver = NewtonSolverMut {
@@ -295,7 +297,7 @@ fn main() {
         #[cfg(feature = "log")]
         format!("output/log/{FILENAME}_E_{E}_NU_{NU}_DENSITY_{DENSITY}/"),
         #[cfg(feature = "log")]
-        format!("ACTIVESETEPI_{ACTIVE_SET_EPI}_NEIGH_{NEIGHBOR_LEVEL}_.txt"),
+        format!("ACTIVESETEPI_{:.precision$}_NEIGH_{:02}_.txt", ACTIVE_SET_EPI,NEIGHBOR_LEVEL),
         #[cfg(feature = "log")]
         format!("{COMMENT}\nE: {E}\nNU: {NU}\nACTIVE_SET_EPI: {ACTIVE_SET_EPI}\nNEIGH: {NEIGHBOR_LEVEL}")
         );
