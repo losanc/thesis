@@ -275,7 +275,7 @@ fn main() {
 
     let precision = args[12].parse::<usize>().unwrap();
 
-    let problem = BouncingUpdateScenario::new("armadillonew");
+    let problem = BouncingUpdateScenario::new(FILENAME);
 
     let solver = NewtonSolverMut {
         max_iter: 300,
