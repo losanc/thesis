@@ -32,10 +32,10 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
         let mut h: P::HessianType;
         let mut count = 0;
         let mut res = input.clone();
-        // #[cfg(feature = "log")]
-        // let mut old_value = p.apply(&input);
-        // #[cfg(feature = "log")]
-        // let mut new_value: f64;
+        #[cfg(feature = "log")]
+        let mut old_value = p.apply(&input);
+        #[cfg(feature = "log")]
+        let mut new_value: f64;
         while g.norm() > self.epi {
             let _start = std::time::Instant::now();
             let result = p.hessian_mut(&res);
@@ -49,11 +49,11 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
             //     "linear solver time spend: ",
             //     _start.elapsed().as_secs_f32()
             // );
-            // mylog!(
-            //     log,
-            //     "linear residual: ",
-            //     (crate::MatrixType::mul(&h, &delta) - &g).norm()
-            // );
+            mylog!(
+                log,
+                "linear residual: ",
+                (crate::MatrixType::mul(&h, &delta) - &g).norm()
+            );
 
             let scalar = ls.search(p, &res, &delta);
             mylog!(log, "line search scalar: ", scalar);
@@ -64,14 +64,14 @@ impl<P: Problem, L: LinearSolver<MatrixType = P::HessianType>, LS: LineSearch<P>
                 mylog!(log, "MAX ITERATION reached", count);
                 panic!("max newtons steps");
             }
-            // crate::run_when_logging!(new_value = p.apply(&res));
+            crate::run_when_logging!(new_value = p.apply(&res));
             // mylog!(log, "delta length", delta.norm());
-            // mylog!(log, "value", p.apply(&res));
-            // mylog!(log, "value reduction", old_value - new_value);
+            mylog!(log, "value", p.apply(&res));
+            mylog!(log, "value reduction", old_value - new_value);
             mylog!(log, "gradient norm", g.norm());
-            // mylog!(log, " ", " ");
+            mylog!(log, " ", " ");
             count += 1;
-            // crate::run_when_logging!(old_value = new_value);
+            crate::run_when_logging!(old_value = new_value);
         }
         mylog!(log, "newton steps", count);
         res

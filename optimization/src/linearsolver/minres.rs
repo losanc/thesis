@@ -14,7 +14,7 @@ impl<T: MatrixType> LinearSolver for MINRESLinear<T> {
     fn new() -> Self {
         MINRESLinear {
             phantom: PhantomData,
-            epi: 0.001,
+            epi: 1e-11,
         }
     }
     #[allow(non_snake_case)]
