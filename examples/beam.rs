@@ -328,7 +328,7 @@ fn main() {
         linearsolver,
         linesearch,
         #[cfg(feature = "log")]
-        format!("output/log/{FILENAME}_E_{E}_NU_{NU}_ROW_{ROW}_DENSITY_{DENSITY}_COL_{COL}_SIZE_{SIZE}/"),
+        format!("output/log/{FILENAME}_E_{:e}_NU_{NU}_ROW_{ROW}_DENSITY_{DENSITY}_COL_{COL}_SIZE_{SIZE}/",E),
         #[cfg(feature = "log")]
         format!("ACTIVESETEPI_{:.precision$}_NEIGH_{:02}_.txt",ACTIVE_SET_EPI,NEIGHBOR_LEVEL),
         #[cfg(feature = "log")]
