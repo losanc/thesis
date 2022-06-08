@@ -72,15 +72,16 @@ impl<P: PreConditioner> LinearSolver for NewtonCG<P> {
         let mut beta: f64;
 
         let mut numerate = (r.transpose() * &z)[(0, 0)];
-        for i in 0..10000 {
+        for _ in 0..10000 {
             let denominator = p.transpose() * (A.mul(&p));
             let denominator = denominator[(0, 0)];
             if denominator < 0.0 {
-                if i == 0 {
-                    return b.clone();
-                } else {
-                    return x;
-                }
+                panic!("cg failed");
+                // if i == 0 {
+                //     return b.clone();
+                // } else {
+                //     return x;
+                // }
             }
             alpha = numerate / denominator;
             x += alpha * &p;
@@ -96,6 +97,6 @@ impl<P: PreConditioner> LinearSolver for NewtonCG<P> {
             p = &z + beta * &p;
             numerate = new_num;
         }
-        x
+        panic!("cg failed");
     }
 }
