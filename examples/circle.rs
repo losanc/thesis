@@ -241,9 +241,9 @@ impl CircleScenario {
         // println!("{}",p.verts);
 
         for i in 0..p.n_verts {
-            if p.verts[DIM * i] < 0.0{
-                p.verts[DIM * i] *=  ( -p.verts[DIM * i]/ RADIUS  ).exp();
-                p.verts[DIM * i+1] *=  ( p.verts[DIM * i]/ RADIUS ).exp();
+            if p.verts[DIM * i] < 0.0 {
+                p.verts[DIM * i] *= (-p.verts[DIM * i] / RADIUS).exp();
+                p.verts[DIM * i + 1] *= (p.verts[DIM * i] / RADIUS).exp();
             }
         }
 
@@ -334,7 +334,7 @@ fn main() {
         linearsolver,
         linesearch,
         #[cfg(feature = "log")]
-        format!("output/log/{FILENAME}_E_{:e}_NU_{NU}_RADIUS_{RADIUS}_DENSITY_{DENSITY}_RES_{RES}/",E),
+        format!("output/log/{FILENAME}_E_{:e}_NU_{NU}_RADIUS_{RADIUS}_DENSITY_{DENSITY}_RES_{RES}_DT_{:.3}/",E,DT),
         #[cfg(feature = "log")]
         format!("ACTIVESETEPI_{:.precision$}_NEIGH_{:02}_.txt",ACTIVE_SET_EPI,NEIGHBOR_LEVEL),
         #[cfg(feature = "log")]

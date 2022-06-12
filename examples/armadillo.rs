@@ -261,7 +261,7 @@ fn main() {
     let NU = args[2].parse::<f64>().unwrap();
     // let MIU = E / (2.0 * (1.0 + NU));
     // let LAMBDA = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-    // let DT = args[3].parse::<f64>().unwrap();
+    let DT = args[3].parse::<f64>().unwrap();
     let DENSITY = args[4].parse::<f64>().unwrap();
     // let DAMP = args[5].parse::<f64>().unwrap();
 
@@ -295,7 +295,7 @@ fn main() {
         linearsolver,
         linesearch,
         #[cfg(feature = "log")]
-        format!("output/log/{FILENAME}_E_{E}_NU_{NU}_DENSITY_{DENSITY}/"),
+        format!("output/log/{FILENAME}_E_{E}_NU_{NU}_DENSITY_{DENSITY}_DT_{:.3}/",DT),
         #[cfg(feature = "log")]
         format!("ACTIVESETEPI_{:.precision$}_NEIGH_{:02}_.txt", ACTIVE_SET_EPI,NEIGHBOR_LEVEL),
         #[cfg(feature = "log")]

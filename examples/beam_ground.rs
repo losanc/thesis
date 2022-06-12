@@ -53,9 +53,7 @@ impl Problem for BeamScenario {
         res += self.inertia_apply(x);
         res += self.beam.elastic_apply(x, &self.energy);
         for i in 0..self.beam.n_verts {
-            res += self
-                .ground
-                .energy(x.index((i * DIM..i * DIM + DIM, 0)));
+            res += self.ground.energy(x.index((i * DIM..i * DIM + DIM, 0)));
         }
         res
     }
@@ -66,9 +64,7 @@ impl Problem for BeamScenario {
         res += self.beam.elastic_gradient(x, &self.energy);
         for i in 0..self.beam.n_verts {
             let mut slice = res.index_mut((i * DIM..i * DIM + DIM, 0));
-            slice += self
-                .ground
-                .gradient(x.index((i * DIM..i * DIM + DIM, 0)));
+            slice += self.ground.gradient(x.index((i * DIM..i * DIM + DIM, 0)));
         }
         Some(res)
     }
@@ -154,9 +150,7 @@ impl Problem for BeamScenario {
 
         for i in 0..self.beam.n_verts {
             let mut slice = res.index_mut((i * DIM..i * DIM + DIM, i * DIM..i * DIM + DIM));
-            slice += self
-                .ground
-                .hessian(x.index((i * DIM..i * DIM + DIM, 0)));
+            slice += self.ground.hessian(x.index((i * DIM..i * DIM + DIM, 0)));
         }
 
         (Some(CsrMatrix::from(&res)), assem_count)
@@ -232,14 +226,14 @@ impl BeamScenario {
         // init velocity
         for i in 0..COL {
             for j in 0..ROW {
-                p.velos[DIM * (i * ROW + j)+1] =
+                p.velos[DIM * (i * ROW + j) + 1] =
                     -1.0 * (i as f64) * (i as f64) * (i as f64 / 20.0) * SIZE * SIZE * SIZE;
             }
         }
 
         let mut g_vec = DVector::zeros(DIM * p.n_verts);
         for i in ROW..p.n_verts {
-            g_vec[DIM * i+1] = -9.8;
+            g_vec[DIM * i + 1] = -9.8;
         }
         let energy = EnergyType {
             mu: MIU,
@@ -296,7 +290,7 @@ fn main() {
     let NU = args[2].parse::<f64>().unwrap();
     // let MIU = E / (2.0 * (1.0 + NU));
     // let LAMBDA = (E * NU) / ((1.0 + NU) * (1.0 - 2.0 * NU));
-    // let DT = args[3].parse::<f64>().unwrap();
+    let DT = args[3].parse::<f64>().unwrap();
     let DENSITY = args[4].parse::<f64>().unwrap();
     let ROW = args[5].parse::<usize>().unwrap();
     let COL = args[6].parse::<usize>().unwrap();
@@ -334,7 +328,7 @@ fn main() {
         linearsolver,
         linesearch,
         #[cfg(feature = "log")]
-        format!("output/log/{FILENAME}_E_{:e}_NU_{NU}_ROW_{ROW}_DENSITY_{DENSITY}_COL_{COL}_SIZE_{SIZE}/",E),
+        format!("output/log/{FILENAME}_E_{:e}_NU_{NU}_ROW_{ROW}_DENSITY_{DENSITY}_COL_{COL}_SIZE_{SIZE}_DT_{:.3}/",E,DT),
         #[cfg(feature = "log")]
         format!("ACTIVESETEPI_{:.precision$}_NEIGH_{:02}_.txt",ACTIVE_SET_EPI,NEIGHBOR_LEVEL),
         #[cfg(feature = "log")]
