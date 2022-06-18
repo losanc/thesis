@@ -229,6 +229,13 @@ impl BeamScenario {
 
         let mut p = plane(ROW, COL, Some(SIZE), Some(SIZE), Some(DENSITY));
 
+        // for i in 0..ROW {
+        //     p.verts[DIM * i + 1] -= 1.0;
+        // }
+        // // for i in 0..ROW {
+        // //     p.verts[DIM * (i+ROW) + 1] -= 0.5;
+        // // }
+
         // init velocity
         for i in 0..COL {
             for j in 0..ROW {
@@ -316,7 +323,9 @@ fn main() {
         epi: 1e-3,
     };
     // let linearsolver = CscCholeskySolver {};
-    let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
+    // let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
+    let mut linearsolver = MINRESLinear::<CsrMatrix<f64>>::new();
+    linearsolver.epi = 1e-7;
     let linesearch = SimpleLineSearch {
         alpha: 0.9,
         tol: 0.01,
