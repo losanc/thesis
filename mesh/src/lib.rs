@@ -6,7 +6,7 @@ mod mesh_impl2d;
 mod mesh_impl3d;
 mod util;
 pub use dim2::*;
-pub use dim3::armadillo;
+pub use dim3::*;
 pub use energy::*;
 pub use util::*;
 

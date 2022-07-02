@@ -15,28 +15,60 @@ use crate::Mesh3d;
 impl Mesh3d {
     pub fn save_to_obj<P: AsRef<Path>>(&self, path: P) {
         let mut file = File::create(path).unwrap();
-        writeln!(file, "g obj").unwrap();
+
+        writeln!(file, "# vtk DataFile Version 4.2").unwrap();
+        writeln!(file, "Cube example").unwrap();
+        writeln!(file, "ASCII").unwrap();
+        writeln!(file, "DATASET UNSTRUCTURED_GRID").unwrap();
+        writeln!(file, "POINTS {} float", self.n_verts).unwrap();
         for i in 0..self.n_verts {
             writeln!(
                 file,
-                "v  {}  {}  {} ",
+                "{}  {}  {} ",
                 self.verts[i * 3],
                 self.verts[i * 3 + 1],
                 self.verts[i * 3 + 2],
             )
             .unwrap();
         }
-        writeln!(file).unwrap();
-        for inds in self.surface.as_ref().unwrap().iter() {
+        writeln!(file, "CELLS {} {}", self.n_prims, 5 * self.n_prims).unwrap();
+        for i in 0..self.n_prims {
             writeln!(
                 file,
-                "f  {}  {}  {} ",
-                inds[0] + 1,
-                inds[1] + 1,
-                inds[2] + 1,
+                "4  {}  {}  {} {} ",
+                self.prim_connected_vert_indices[i][0],
+                self.prim_connected_vert_indices[i][1],
+                self.prim_connected_vert_indices[i][2],
+                self.prim_connected_vert_indices[i][3],
             )
             .unwrap();
         }
+        writeln!(file, "CELL_TYPES {}", self.n_prims).unwrap();
+        for _ in 0..self.n_prims {
+            writeln!(file, "10").unwrap();
+        }
+        // writeln!(file, "g obj").unwrap();
+        // for i in 0..self.n_verts {
+        //     writeln!(
+        //         file,
+        //         "v  {}  {}  {} ",
+        //         self.verts[i * 3],
+        //         self.verts[i * 3 + 1],
+        //         self.verts[i * 3 + 2],
+        //     )
+        //     .unwrap();
+        // }
+        // writeln!(file).unwrap();
+        // for inds in self.surface.as_ref().unwrap().iter() {
+        //     writeln!(
+        //         file,
+        //         "f  {}  {}  {} ",
+        //         inds[0] + 1,
+        //         inds[1] + 1,
+        //         inds[2] + 1,
+        //     )
+        //     .unwrap();
+        // }
     }
     pub fn prim_energy<E: Energy<12, 3>, T>(
         &self,
