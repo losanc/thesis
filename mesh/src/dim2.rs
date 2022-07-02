@@ -2,6 +2,7 @@ use crate::area;
 use crate::Mesh;
 use nalgebra::DVector;
 use nalgebra::{matrix, SMatrix};
+use rand::Rng;
 use std::collections::HashSet;
 
 fn volume_mass_construct(
@@ -45,7 +46,14 @@ fn volume_mass_construct(
     (mass, volumes, ma_invs)
 }
 
-pub fn plane(r: usize, c: usize, w: Option<f64>, h: Option<f64>, d: Option<f64>) -> Mesh<2, 3> {
+pub fn plane(
+    r: usize,
+    c: usize,
+    w: Option<f64>,
+    h: Option<f64>,
+    d: Option<f64>,
+    uniform: bool,
+) -> Mesh<2, 3> {
     assert!(r * c > 0);
     //  the shape of this Plane
 
@@ -62,11 +70,33 @@ pub fn plane(r: usize, c: usize, w: Option<f64>, h: Option<f64>, d: Option<f64>)
     let w = w.unwrap_or(1.0);
     let h = h.unwrap_or(1.0);
 
+    let mut rng = rand::thread_rng();
+    let mut row_cooridantes: Vec<f64>;
+    let mut col_cooridantes: Vec<f64>;
+    if !uniform {
+        row_cooridantes = (0..r - 1)
+            .map(|_| ((r - 1) as f64) * w * rng.gen::<f64>())
+            .collect();
+        col_cooridantes = (0..c - 1)
+            .map(|_| ((c - 1) as f64) * h * rng.gen::<f64>())
+            .collect();
+        row_cooridantes.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        col_cooridantes.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        row_cooridantes[0] = 0.0;
+        col_cooridantes[0] = 0.0;
+        row_cooridantes.push((r as f64 - 1.0) * w);
+        col_cooridantes.push((c as f64 - 1.0) * h);
+    } else {
+        row_cooridantes = (0..r).map(|i| (i as f64) * w).collect();
+        col_cooridantes = (0..c).map(|i| (i as f64) * h).collect();
+    }
     let verts = DVector::from_fn(2 * r * c, |i, _| {
         if i % 2 == 1 {
-            (((i - 1) / 2) / r) as f64 * w
+            // (((i - 1) / 2) / r) as f64 * w
+            col_cooridantes[(((i - 1) / 2) / r)]
         } else {
-            ((i / 2) % r) as f64 * h
+            row_cooridantes[((i / 2) % r)]
+            // ((i / 2) % r) as f64 * h
         }
     });
 

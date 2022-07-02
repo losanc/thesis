@@ -211,6 +211,7 @@ impl BeamScenario {
         let NEIGHBOR_LEVEL = args[10].parse::<usize>().unwrap();
         let FILENAME = &args[11];
         let MODIFICATION = &args[14];
+        let uniform = args[16].parse::<bool>().unwrap();
         let modi: HessianModification;
         match MODIFICATION.as_str() {
             "no" => {
@@ -227,7 +228,7 @@ impl BeamScenario {
             }
         }
 
-        let mut p = plane(ROW, COL, Some(SIZE), Some(SIZE), Some(DENSITY));
+        let mut p = plane(ROW, COL, Some(SIZE), Some(SIZE), Some(DENSITY), uniform);
 
         // for i in 0..ROW {
         //     p.verts[DIM * i + 1] -= 1.0;
@@ -238,9 +239,9 @@ impl BeamScenario {
 
         // init velocity
         for i in 0..COL {
+            let x = p.verts[DIM * (i * ROW) + 1];
             for j in 0..ROW {
-                p.velos[DIM * (i * ROW + j)] =
-                    -1.0 * (i as f64) * (i as f64) * (i as f64 / 20.0) * SIZE * SIZE * SIZE;
+                p.velos[DIM * (i * ROW + j)] = -5.0 * x * x * x * SIZE * SIZE * SIZE;
             }
         }
 

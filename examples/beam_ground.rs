@@ -205,6 +205,7 @@ impl BeamScenario {
         let NEIGHBOR_LEVEL = args[10].parse::<usize>().unwrap();
         let FILENAME = &args[11];
         let MODIFICATION = &args[14];
+        let uniform = args[16].parse::<bool>().unwrap();
         let modi: HessianModification;
         match MODIFICATION.as_str() {
             "no" => {
@@ -221,7 +222,7 @@ impl BeamScenario {
             }
         }
 
-        let mut p = plane(ROW, COL, Some(SIZE), Some(SIZE), Some(DENSITY));
+        let mut p = plane(ROW, COL, Some(SIZE), Some(SIZE), Some(DENSITY), uniform);
 
         // init velocity
         for i in 0..COL {
