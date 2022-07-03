@@ -47,28 +47,6 @@ impl Mesh3d {
         for _ in 0..self.n_prims {
             writeln!(file, "10").unwrap();
         }
-        // writeln!(file, "g obj").unwrap();
-        // for i in 0..self.n_verts {
-        //     writeln!(
-        //         file,
-        //         "v  {}  {}  {} ",
-        //         self.verts[i * 3],
-        //         self.verts[i * 3 + 1],
-        //         self.verts[i * 3 + 2],
-        //     )
-        //     .unwrap();
-        // }
-        // writeln!(file).unwrap();
-        // for inds in self.surface.as_ref().unwrap().iter() {
-        //     writeln!(
-        //         file,
-        //         "f  {}  {}  {} ",
-        //         inds[0] + 1,
-        //         inds[1] + 1,
-        //         inds[2] + 1,
-        //     )
-        //     .unwrap();
-        // }
     }
     pub fn prim_energy<E: Energy<12, 3>, T>(
         &self,

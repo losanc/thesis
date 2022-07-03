@@ -17,10 +17,6 @@ pub struct Mesh<const D: usize, const T: usize> {
     pub n_verts: usize,
     pub n_prims: usize,
 
-    // optional, only valid for 3d mesh
-    // for 2d mesh, can be directly accessed by prim_connected_vert_indices
-    pub surface: Option<Vec<[usize; D]>>,
-
     // attributes for each vertex coordiants
     // length = n_verts* self.dim()
     pub verts: DVector<f64>,

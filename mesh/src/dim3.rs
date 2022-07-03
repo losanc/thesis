@@ -4,7 +4,6 @@ use nalgebra::matrix;
 use nalgebra::DVector;
 use nalgebra::SMatrix;
 use rand::Rng;
-use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
@@ -39,7 +38,6 @@ fn volume_mass_construct(
             verts[*t * 3 + 1],
             verts[*t * 3 + 2],
         );
-
         mass[*i * 3] += 0.25 * size * density;
         mass[*i * 3 + 1] += 0.25 * size * density;
         mass[*i * 3 + 2] += 0.25 * size * density;
@@ -96,29 +94,6 @@ pub fn armadillo() -> Mesh3d {
     let mut prim_connected_vert_indices = Vec::<[usize; 4]>::new();
     let mut vert_connected_prim_indices = vec![Vec::<usize>::new(); 1180];
     let mut count = 0;
-    let mut surface = HashSet::<[usize; 3]>::new();
-
-    let sort = |(x, y, z)| -> [usize; 3] {
-        if x < y && y < z {
-            return [x, y, z];
-        };
-        if x < z && z < y {
-            return [x, z, y];
-        };
-        if y < z && z < x {
-            return [y, z, x];
-        };
-        if y < x && x < z {
-            return [y, x, z];
-        };
-        if z < y && y < x {
-            return [z, y, x];
-        };
-        if z < x && x < y {
-            return [z, x, y];
-        };
-        panic!("This shouldn't happen");
-    };
 
     for line in ele_lines {
         let line = line.unwrap();
@@ -129,37 +104,6 @@ pub fn armadillo() -> Mesh3d {
         let v3 = words.next().unwrap().parse::<usize>().unwrap();
         let v4 = words.next().unwrap().parse::<usize>().unwrap();
         prim_connected_vert_indices.push([v1, v2, v3, v4]);
-        // don't know why blender don't render object double sided
-        let f1 = sort((v1, v2, v3));
-        let f2 = sort((v1, v2, v4));
-        let f3 = sort((v1, v3, v4));
-        let f4 = sort((v2, v3, v4));
-
-        // this order can correctly rendered by blender
-        // let f1 = [v1, v2, v3];
-        // let f2 = [v1,v4,v2];
-        // let f3 = [v1,v3,v4];
-        // let f4 = [v2,v4,v3];
-        if surface.contains(&f1) {
-            surface.remove(&f1);
-        } else {
-            surface.insert(f1);
-        }
-        if surface.contains(&f2) {
-            surface.remove(&f2);
-        } else {
-            surface.insert(f2);
-        }
-        if surface.contains(&f3) {
-            surface.remove(&f3);
-        } else {
-            surface.insert(f3);
-        }
-        if surface.contains(&f4) {
-            surface.remove(&f4);
-        } else {
-            surface.insert(f4);
-        }
 
         vert_connected_prim_indices[v1].push(count);
         vert_connected_prim_indices[v2].push(count);
@@ -176,7 +120,6 @@ pub fn armadillo() -> Mesh3d {
     Mesh3d {
         n_verts: 1180,
         n_prims: 3717,
-        surface: Some(surface.iter().map(|x| *x).collect::<Vec<[usize; 3]>>()),
         verts,
         velos: DVector::<f64>::zeros(1180 * 3),
         accls: DVector::<f64>::zeros(1180 * 3),
@@ -345,11 +288,10 @@ pub fn cube(
     Mesh3d {
         n_verts: verts.len() / 3,
         n_prims: prim_connected_vert_indices.len(),
-        // surface: Some(surface.iter().map(|x| *x).collect::<Vec<[usize; 3]>>()),
-        surface: None,
+
+        velos: DVector::<f64>::zeros(verts.len()),
+        accls: DVector::<f64>::zeros(verts.len()),
         verts,
-        velos: DVector::<f64>::zeros(1180 * 3),
-        accls: DVector::<f64>::zeros(1180 * 3),
         masss,
         volumes,
         ma_invs,

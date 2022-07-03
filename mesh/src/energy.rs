@@ -90,7 +90,7 @@ impl Energy<12, 3> for StVenantVirchhoff<3> {
         ene
     }
 }
-
+#[derive(Debug)]
 pub struct NeoHookean<const DIM: usize> {
     pub mu: f64,
     pub lambda: f64,

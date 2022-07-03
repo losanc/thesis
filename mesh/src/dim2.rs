@@ -3,7 +3,6 @@ use crate::Mesh;
 use nalgebra::DVector;
 use nalgebra::{matrix, SMatrix};
 use rand::Rng;
-use std::collections::HashSet;
 
 fn volume_mass_construct(
     density: f64,
@@ -142,7 +141,6 @@ pub fn plane(
     Mesh {
         n_verts: r * c,
         n_prims: count,
-        surface: None,
 
         verts,
         velos: DVector::<f64>::zeros(2 * r * c),
@@ -214,7 +212,6 @@ pub fn fan(r: f64, s: usize, d: Option<f64>) -> Mesh<2, 3> {
     Mesh {
         n_verts,
         n_prims,
-        surface: None,
 
         verts,
         velos: DVector::<f64>::zeros(2 * n_verts),
@@ -263,14 +260,6 @@ pub fn circle(r: f64, res: usize, d: Option<f64>) -> Mesh<2, 3> {
     let mut prim_connected_vert_indices = Vec::<[usize; 3]>::new();
     let mut vert_connected_prim_indices = vec![Vec::<usize>::new(); count];
 
-    let mut surface = HashSet::<[usize; 2]>::new();
-    let sort = |x, y| -> [usize; 2] {
-        if x < y {
-            return [x, y];
-        }
-        return [y, x];
-    };
-
     for circ in 0..res {
         let mut other = 0;
         for point in 0..(circ + 1) * 6 {
@@ -285,27 +274,6 @@ pub fn circle(r: f64, res: usize, d: Option<f64>) -> Mesh<2, 3> {
                 vert_connected_prim_indices[v3].push(n_prims);
                 n_prims += 1;
 
-                let e1 = sort(v1, v2);
-                let e2 = sort(v3, v2);
-                let e3 = sort(v1, v3);
-                if surface.contains(&e1) {
-                    surface.remove(&e1);
-                } else {
-                    surface.insert(e1);
-                }
-
-                if surface.contains(&e2) {
-                    surface.remove(&e2);
-                } else {
-                    surface.insert(e2);
-                }
-
-                if surface.contains(&e3) {
-                    surface.remove(&e3);
-                } else {
-                    surface.insert(e3);
-                };
-
                 let v1 = get_point_index(circ + 1, point);
                 let v2 = get_point_index(circ + 1, point + 1);
                 let v3 = get_point_index(circ, other + 1);
@@ -314,27 +282,6 @@ pub fn circle(r: f64, res: usize, d: Option<f64>) -> Mesh<2, 3> {
                 vert_connected_prim_indices[v1].push(n_prims);
                 vert_connected_prim_indices[v2].push(n_prims);
                 vert_connected_prim_indices[v3].push(n_prims);
-                let e1 = sort(v1, v2);
-                let e2 = sort(v3, v2);
-                let e3 = sort(v1, v3);
-
-                if surface.contains(&e1) {
-                    surface.remove(&e1);
-                } else {
-                    surface.insert(e1);
-                }
-
-                if surface.contains(&e2) {
-                    surface.remove(&e2);
-                } else {
-                    surface.insert(e2);
-                }
-
-                if surface.contains(&e3) {
-                    surface.remove(&e3);
-                } else {
-                    surface.insert(e3);
-                }
 
                 other += 1;
                 n_prims += 1;
@@ -346,26 +293,7 @@ pub fn circle(r: f64, res: usize, d: Option<f64>) -> Mesh<2, 3> {
                 vert_connected_prim_indices[v1].push(n_prims);
                 vert_connected_prim_indices[v2].push(n_prims);
                 vert_connected_prim_indices[v3].push(n_prims);
-                let e1 = sort(v1, v2);
-                let e2 = sort(v3, v2);
-                let e3 = sort(v1, v3);
-                if surface.contains(&e1) {
-                    surface.remove(&e1);
-                } else {
-                    surface.insert(e1);
-                }
 
-                if surface.contains(&e2) {
-                    surface.remove(&e2);
-                } else {
-                    surface.insert(e2);
-                }
-
-                if surface.contains(&e3) {
-                    surface.remove(&e3);
-                } else {
-                    surface.insert(e3);
-                }
                 n_prims += 1;
             }
         }
@@ -376,7 +304,6 @@ pub fn circle(r: f64, res: usize, d: Option<f64>) -> Mesh<2, 3> {
     Mesh {
         n_verts,
         n_prims,
-        surface: Some(surface.iter().map(|x| *x).collect::<Vec<[usize; 2]>>()),
 
         verts: vertices,
         velos: DVector::<f64>::zeros(2 * n_verts),

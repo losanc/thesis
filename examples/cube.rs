@@ -1,7 +1,9 @@
 #![allow(non_snake_case)]
 #![allow(unused_variables)]
-use mesh::HessianModification;
-use mesh::{armadillo, Mesh3d};
+use std::f64::consts::PI;
+
+use mesh::Mesh3d;
+use mesh::{cube, HessianModification};
 use nalgebra::{DMatrix, DVector, SMatrix, SVector};
 use nalgebra_sparse::*;
 use optimization::*;
@@ -9,11 +11,10 @@ use thesis::scenarios::{Scenario, ScenarioProblem};
 
 pub const DIM: usize = 3;
 pub const CO_NUM: usize = 12;
-pub const NFIXED_VERT: usize = 20;
 type EnergyType = mesh::NeoHookean3d;
 
 pub struct BouncingUpdateScenario {
-    armadillo: Mesh3d,
+    cube: Mesh3d,
     dt: f64,
     name: String,
     energy: EnergyType,
@@ -49,19 +50,16 @@ impl Problem for BouncingUpdateScenario {
     fn apply(&self, x: &DVector<f64>) -> f64 {
         let mut res = 0.0;
         res += self.inertia_apply(x);
-        res += self.armadillo.elastic_apply(x, &self.energy);
+        res += self.cube.elastic_apply(x, &self.energy);
         res
     }
 
     fn gradient(&self, x: &DVector<f64>) -> Option<DVector<f64>> {
         let mut res = DVector::<f64>::zeros(x.len());
         res += self.inertia_gradient(x);
-        res += self.armadillo.elastic_gradient(x, &self.energy);
 
-        let mut slice = res.index_mut((0..NFIXED_VERT * DIM, 0));
-        for i in slice.iter_mut() {
-            *i = 0.0;
-        }
+        res += self.cube.elastic_gradient(x, &self.energy);
+
         Some(res)
     }
 
@@ -86,16 +84,16 @@ impl Problem for BouncingUpdateScenario {
         let mut update_triangle_list = self
             .active_set
             .iter()
-            .map(|x| self.armadillo.vert_connected_prim_indices[*x].clone())
+            .map(|x| self.cube.vert_connected_prim_indices[*x].clone())
             .flatten()
             .collect::<std::collections::HashSet<usize>>();
 
         for _ in 0..self.neighbor_level {
             update_triangle_list = update_triangle_list
                 .iter()
-                .map(|x| self.armadillo.prim_connected_vert_indices[*x].clone())
+                .map(|x| self.cube.prim_connected_vert_indices[*x].clone())
                 .flatten()
-                .map(|x| self.armadillo.vert_connected_prim_indices[x].clone())
+                .map(|x| self.cube.vert_connected_prim_indices[x].clone())
                 .flatten()
                 .collect::<std::collections::HashSet<usize>>();
         }
@@ -105,14 +103,14 @@ impl Problem for BouncingUpdateScenario {
         for i in &update_triangle_list {
             let i = *i;
             let mut vert_vec = SVector::<f64, CO_NUM>::zeros();
-            let indices = self.armadillo.get_indices(i);
+            let indices = self.cube.get_indices(i);
 
             vert_vec
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = x[*i]);
             let energy_hessian =
-                self.armadillo
+                self.cube
                     .prim_projected_hessian(i, &self.energy, vert_vec, self.modification);
 
             let old_energy_hessian = self.hessian_list[i];
@@ -128,12 +126,7 @@ impl Problem for BouncingUpdateScenario {
         }
 
         // res += &self.init_hessian;
-        let mut sparse = CsrMatrix::from(&self.init_hessian);
-        for (i, j, k) in sparse.triplet_iter_mut() {
-            if i < NFIXED_VERT * DIM || j < NFIXED_VERT * DIM {
-                *k = 0.0;
-            }
-        }
+        let sparse = CsrMatrix::from(&self.init_hessian);
 
         (
             Some(self.inertia_hessian(x) + sparse),
@@ -151,19 +144,19 @@ impl Problem for BouncingUpdateScenario {
 
 impl ScenarioProblem for BouncingUpdateScenario {
     fn initial_guess(&self) -> DVector<f64> {
-        self.armadillo.verts.clone()
+        self.cube.verts.clone()
     }
     fn set_all_vertices_vector(&mut self, vertices: DVector<f64>) {
-        let velocity = self.damp * ((&vertices - &self.armadillo.verts) / self.dt);
-        self.armadillo.velos = velocity;
-        self.armadillo.verts = vertices;
+        let velocity = self.damp * ((&vertices - &self.cube.verts) / self.dt);
+        self.cube.velos = velocity;
+        self.cube.verts = vertices;
     }
     fn save_to_file(&self, frame: usize) {
-        self.armadillo
+        self.cube
             .save_to_obj(format!("output/mesh/{}{}.vtk", self.name, frame));
     }
     fn frame_init(&mut self) {
-        self.x_tao = &self.armadillo.verts + self.dt * &self.armadillo.velos;
+        self.x_tao = &self.cube.verts + self.dt * &self.cube.velos;
     }
     fn frame_end(&mut self) {
         // self.frame+=1;
@@ -190,6 +183,10 @@ impl BouncingUpdateScenario {
         let TOTAL_FRAME = args[10].parse::<usize>().unwrap();
         let MODIFICATION = &args[11];
 
+        let ROW = args[13].parse::<usize>().unwrap();
+        let COLUMN = args[14].parse::<usize>().unwrap();
+        let STACK = args[15].parse::<usize>().unwrap();
+
         let modi: HessianModification;
         match MODIFICATION.as_str() {
             "no" => {
@@ -206,11 +203,32 @@ impl BouncingUpdateScenario {
             }
         }
 
-        let p = armadillo();
-        let mut g_vec = DVector::zeros(DIM * p.n_verts);
-        for i in NFIXED_VERT..p.n_verts {
-            g_vec[DIM * i + 1] = -9.8;
+        let mut p = cube(ROW, COLUMN, STACK, None, None, None, Some(DENSITY), false);
+
+        let center_x = (ROW / 2) as f64;
+        let center_y = (COLUMN / 2) as f64;
+        for i in 0..p.n_verts {
+            p.verts[DIM * i] -= center_x;
+            p.verts[DIM * i + 1] -= center_y;
+
+            let length = (p.verts[DIM * i] * p.verts[DIM * i]
+                + p.verts[DIM * i + 1] * p.verts[DIM * i + 1])
+                .sqrt();
+            if length < 1e-5 {
+                continue;
+            }
+
+            let mut angle = (p.verts[DIM * i] / length).asin();
+            let cosvalue = p.verts[DIM * i + 1] / length;
+            if cosvalue < 0.0 {
+                angle = PI - angle;
+            }
+            angle += p.verts[DIM * i + 2] / 10.0;
+            p.verts[DIM * i] = angle.sin() * length;
+            p.verts[DIM * i + 1] = angle.cos() * length;
         }
+
+        let g_vec = DVector::zeros(DIM * p.n_verts);
         let energy = EnergyType {
             mu: MIU,
             lambda: LAMBDA,
@@ -238,7 +256,7 @@ impl BouncingUpdateScenario {
             energy,
             name: String::from(name),
             mass: CsrMatrix::from(&mass),
-            armadillo: p,
+            cube: p,
 
             x_tao: DVector::<f64>::zeros(1),
             g_vec,
