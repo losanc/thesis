@@ -14,11 +14,20 @@ total_frame = 200
 start_neigh = 0
 end_neigh = 10
 
-modification = "no"
+modification = "remove"
 physical= "1e6 0.48"
-features = " --features save,log"
 
-dt = "0.0001"
 
-first_command = "cargo run --example circle  --release "+ features+"  "+physical+" "+dt+" 1e3 1 25  1.0  0.0 0  circle"+modification+"  nothing " +str(total_frame)+"  "+modification+ " 10  "
+dt = "0.001"
+
+first_command = "cargo run --example circle  --release --features log "+physical+" "+dt+" 1e3 1 25  1.0  0.0 0  circle"+modification+"  nothing " +str(total_frame)+"  "+modification+ " 10  "
 os.system(first_command)
+
+for i in range(start_percentage, end_percentage+1):
+# for i in range(1, 20):
+    epi = (2** (i-start_percentage)) * min_percentage
+    # epi = i/100.0
+    for j in range(start_neigh,end_neigh):
+        command = "cargo run --example circle --release --features log "+physical+"  "+dt+"  1e3 1 25 1.0  "+str(epi)+"  "+str(j)+" circle"+modification+"  nothing " +str(total_frame)+"  "+modification+ " 10  "
+        os.system(command)
+
