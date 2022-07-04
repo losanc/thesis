@@ -4,6 +4,7 @@ use nalgebra::matrix;
 use nalgebra::DVector;
 use nalgebra::SMatrix;
 use rand::Rng;
+use rand::SeedableRng;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
@@ -162,7 +163,7 @@ pub fn cube(
     let h = h.unwrap_or(1.0);
     let l = l.unwrap_or(1.0);
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(222);
     let mut row_cooridantes: Vec<f64>;
     let mut col_cooridantes: Vec<f64>;
     let mut sta_cooridantes: Vec<f64>;

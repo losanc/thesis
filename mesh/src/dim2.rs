@@ -3,6 +3,7 @@ use crate::Mesh;
 use nalgebra::DVector;
 use nalgebra::{matrix, SMatrix};
 use rand::Rng;
+use rand::SeedableRng;
 
 fn volume_mass_construct(
     density: f64,
@@ -69,7 +70,7 @@ pub fn plane(
     let w = w.unwrap_or(1.0);
     let h = h.unwrap_or(1.0);
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(222);
     let mut row_cooridantes: Vec<f64>;
     let mut col_cooridantes: Vec<f64>;
     if !uniform {
