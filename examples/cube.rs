@@ -186,6 +186,7 @@ impl BouncingUpdateScenario {
         let ROW = args[13].parse::<usize>().unwrap();
         let COLUMN = args[14].parse::<usize>().unwrap();
         let STACK = args[15].parse::<usize>().unwrap();
+        let uniform = args[16].parse::<bool>().unwrap();
 
         let modi: HessianModification;
         match MODIFICATION.as_str() {
@@ -203,7 +204,7 @@ impl BouncingUpdateScenario {
             }
         }
 
-        let mut p = cube(ROW, COLUMN, STACK, None, None, None, Some(DENSITY), false);
+        let mut p = cube(ROW, COLUMN, STACK, None, None, None, Some(DENSITY), uniform);
 
         let center_x = (ROW / 2) as f64;
         let center_y = (COLUMN / 2) as f64;
@@ -215,6 +216,7 @@ impl BouncingUpdateScenario {
                 + p.verts[DIM * i + 1] * p.verts[DIM * i + 1])
                 .sqrt();
             if length < 1e-5 {
+                p.verts[DIM * i + 2] *= 0.5;
                 continue;
             }
 
@@ -223,9 +225,10 @@ impl BouncingUpdateScenario {
             if cosvalue < 0.0 {
                 angle = PI - angle;
             }
-            angle += p.verts[DIM * i + 2] / 10.0;
+            angle += p.verts[DIM * i + 2] / 5.0;
             p.verts[DIM * i] = angle.sin() * length;
             p.verts[DIM * i + 1] = angle.cos() * length;
+            p.verts[DIM * i + 2] *= 0.5;
         }
 
         let g_vec = DVector::zeros(DIM * p.n_verts);
@@ -297,7 +300,7 @@ fn main() {
 
     let solver = NewtonSolverMut {
         max_iter: 300,
-        epi: 1e-3,
+        epi: 2e-2,
     };
     let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
 
