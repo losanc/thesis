@@ -53,6 +53,7 @@ pub fn plane(
     h: Option<f64>,
     d: Option<f64>,
     uniform: bool,
+    seed: u64,
 ) -> Mesh<2, 3> {
     assert!(r * c > 0);
     //  the shape of this Plane
@@ -70,7 +71,7 @@ pub fn plane(
     let w = w.unwrap_or(1.0);
     let h = h.unwrap_or(1.0);
 
-    let mut rng = rand::rngs::StdRng::seed_from_u64(222);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     let mut row_cooridantes: Vec<f64>;
     let mut col_cooridantes: Vec<f64>;
     if !uniform {

@@ -187,6 +187,7 @@ impl BouncingUpdateScenario {
         let COLUMN = args[14].parse::<usize>().unwrap();
         let STACK = args[15].parse::<usize>().unwrap();
         let uniform = args[16].parse::<bool>().unwrap();
+        let seed = args[17].parse::<u64>().unwrap();
 
         let modi: HessianModification;
         match MODIFICATION.as_str() {
@@ -204,7 +205,17 @@ impl BouncingUpdateScenario {
             }
         }
 
-        let mut p = cube(ROW, COLUMN, STACK, None, None, None, Some(DENSITY), uniform);
+        let mut p = cube(
+            ROW,
+            COLUMN,
+            STACK,
+            None,
+            None,
+            None,
+            Some(DENSITY),
+            uniform,
+            seed,
+        );
 
         let center_x = (ROW / 2) as f64;
         let center_y = (COLUMN / 2) as f64;

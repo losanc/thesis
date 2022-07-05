@@ -222,7 +222,15 @@ impl BeamScenario {
             }
         }
 
-        let mut p = plane(ROW, COL, Some(SIZE), Some(SIZE), Some(DENSITY), uniform);
+        let mut p = plane(
+            ROW,
+            COL,
+            Some(SIZE),
+            Some(SIZE),
+            Some(DENSITY),
+            uniform,
+            123,
+        );
 
         // init velocity
         for i in 0..COL {

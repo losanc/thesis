@@ -212,6 +212,7 @@ impl BeamScenario {
         let FILENAME = &args[11];
         let MODIFICATION = &args[14];
         let uniform = args[16].parse::<bool>().unwrap();
+        let seed = args[17].parse::<u64>().unwrap();
         let modi: HessianModification;
         match MODIFICATION.as_str() {
             "no" => {
@@ -228,7 +229,15 @@ impl BeamScenario {
             }
         }
 
-        let mut p = plane(ROW, COL, Some(SIZE), Some(SIZE), Some(DENSITY), uniform);
+        let mut p = plane(
+            ROW,
+            COL,
+            Some(SIZE),
+            Some(SIZE),
+            Some(DENSITY),
+            uniform,
+            seed,
+        );
 
         // for i in 0..ROW {
         //     p.verts[DIM * i + 1] -= 1.0;

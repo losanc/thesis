@@ -142,6 +142,7 @@ pub fn cube(
     l: Option<f64>,
     d: Option<f64>, // disnety
     uniform: bool,
+    seed: u64,
 ) -> Mesh3d {
     assert!(r * c > 0);
     //  the shape of this Plane
@@ -163,7 +164,7 @@ pub fn cube(
     let h = h.unwrap_or(1.0);
     let l = l.unwrap_or(1.0);
 
-    let mut rng = rand::rngs::StdRng::seed_from_u64(222);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     let mut row_cooridantes: Vec<f64>;
     let mut col_cooridantes: Vec<f64>;
     let mut sta_cooridantes: Vec<f64>;
