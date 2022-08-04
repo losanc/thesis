@@ -311,7 +311,7 @@ fn main() {
 
     let solver = NewtonSolverMut {
         max_iter: 300,
-        epi: 2e-2,
+        epi: 1e-1,
     };
     let linearsolver = NewtonCG::<JacobianPre<CsrMatrix<f64>>>::new();
 
@@ -327,7 +327,7 @@ fn main() {
         linearsolver,
         linesearch,
         #[cfg(feature = "log")]
-        format!("output/log/{FILENAME}_E_{E}_NU_{NU}_DENSITY_{DENSITY}_DT_{:.3}/",DT),
+        format!("output/log/{FILENAME}_E_{:e}_NU_{NU}_DENSITY_{DENSITY}_DT_{:.3}/",E,DT),
         #[cfg(feature = "log")]
         format!("ACTIVESETEPI_{:.precision$}_NEIGH_{:02}_.txt", ACTIVE_SET_EPI,NEIGHBOR_LEVEL),
         #[cfg(feature = "log")]

@@ -75,11 +75,12 @@ pub fn plane(
     let mut row_cooridantes: Vec<f64>;
     let mut col_cooridantes: Vec<f64>;
     if !uniform {
+        // non uniform
         row_cooridantes = (0..r - 1)
-            .map(|_| ((r - 1) as f64) * w * rng.gen::<f64>())
+            .map(|_| ((r - 1) as f64) * w * (rng.gen::<f64>()).sqrt().sqrt())
             .collect();
         col_cooridantes = (0..c - 1)
-            .map(|_| ((c - 1) as f64) * h * rng.gen::<f64>())
+            .map(|_| ((c - 1) as f64) * h * (rng.gen::<f64>()).powf(4.0))
             .collect();
         row_cooridantes.sort_by(|a, b| a.partial_cmp(b).unwrap());
         col_cooridantes.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -88,6 +89,7 @@ pub fn plane(
         row_cooridantes.push((r as f64 - 1.0) * w);
         col_cooridantes.push((c as f64 - 1.0) * h);
     } else {
+        // uniform
         row_cooridantes = (0..r).map(|i| (i as f64) * w).collect();
         col_cooridantes = (0..c).map(|i| (i as f64) * h).collect();
     }
