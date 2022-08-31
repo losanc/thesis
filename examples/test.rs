@@ -1,9 +1,8 @@
 #![allow(non_snake_case)]
 #![allow(unused_variables)]
-
 use mesh::*;
 use nalgebra::{DMatrix, DVector, SMatrix, SVector};
-use nalgebra_sparse::{factorization::CscCholesky, CscMatrix, CsrMatrix};
+use nalgebra_sparse::{CscMatrix, CsrMatrix};
 use optimization::*;
 use thesis::scenarios::{Scenario, ScenarioProblem};
 
@@ -22,7 +21,6 @@ pub struct BeamScenario {
     active_set: std::collections::HashSet<usize>,
     hessian_list: Vec<SMatrix<f64, CO_NUM, CO_NUM>>,
     init_hessian: DMatrix<f64>,
-    csc_decom: CscCholesky<f64>,
     frame: usize,
     damp: f64,
     neighbor_level: usize,
@@ -70,15 +68,15 @@ impl Problem for BeamScenario {
     fn gradient_mut(&mut self, x: &DVector<f64>) -> Option<DVector<f64>> {
         let res = self.gradient(x).unwrap();
         // reset active set
-        // {
-        //     self.active_set.clear();
-        //     let boundary = self.active_set_epi * res.amax();
-        //     res.iter().enumerate().for_each(|(i, x)| {
-        //         if x.abs() > boundary {
-        //             self.active_set.insert(i / DIM);
-        //         }
-        //     });
-        // }
+        {
+            self.active_set.clear();
+            let boundary = self.active_set_epi * res.amax();
+            res.iter().enumerate().for_each(|(i, x)| {
+                if x.abs() > boundary {
+                    self.active_set.insert(i / DIM);
+                }
+            });
+        }
         Some(res)
     }
 
@@ -90,54 +88,29 @@ impl Problem for BeamScenario {
             .beam
             .elastic_hessian(x, &self.energy, HessianModification::NoModification);
 
-        // let mut slice = res.index_mut((0..self.n_fixed * DIM, self.n_fixed * DIM..));
-        // for i in slice.iter_mut() {
-        //     *i = 0.0;
-        // }
-        // let mut slice = res.index_mut((self.n_fixed * DIM.., 0..self.n_fixed * DIM));
-        // for i in slice.iter_mut() {
-        //     *i = 0.0;
-        // }
+        let mut slice = res.index_mut((0..self.n_fixed * DIM, self.n_fixed * DIM..));
+        for i in slice.iter_mut() {
+            *i = 0.0;
+        }
+        let mut slice = res.index_mut((self.n_fixed * DIM.., 0..self.n_fixed * DIM));
+        for i in slice.iter_mut() {
+            *i = 0.0;
+        }
         Some(CsrMatrix::from(&res))
     }
 
     fn hessian_mut(&mut self, x: &DVector<f64>) -> (Option<Self::HessianType>, usize) {
-        if self.first_flag == true {
-            let mut res = &self.init_hessian + self.inertia_hessian(x);
-            let mut slice = res.index_mut((0..self.n_fixed * DIM, self.n_fixed * DIM..));
-            for i in slice.iter_mut() {
-                *i = 0.0;
-            }
-            let mut slice = res.index_mut((self.n_fixed * DIM.., 0..self.n_fixed * DIM));
-            for i in slice.iter_mut() {
-                *i = 0.0;
-            }
-            self.first_flag = false;
-            return (Some(CsrMatrix::from(&res)), 0);
-        }
-
-        let hes = self.hessian(x).unwrap();
-        let csc_hes = CscMatrix::from(&hes);
-        let csc_data = csc_hes.csc_data();
-        // println!("{}  {} ",csc_data.2.len() , self.csc_decom.m_pattern.nnz());
-        let decom = self.csc_decom.refactor(csc_data.2);
-        let l = self.csc_decom.l();
-        let gradient = self.gradient(x);
-        let h = l * gradient.unwrap();
-
-        {
-            self.active_set.clear();
-            let boundary = self.active_set_epi * h.amax();
-            h.iter().enumerate().for_each(|(i, x)| {
-                if x.abs() > boundary {
-                    self.active_set.insert(i / DIM);
-                }
-            });
-        };
-
+        
+        // dense version of hessian matrix
         let mut res = DMatrix::<f64>::zeros(x.len(), x.len());
-
         res = res + self.inertia_hessian(x);
+
+        if self.first_flag{
+            res +=&self.init_hessian;
+            self.first_flag = false;
+            return  (Some(CsrMatrix::from(&res)), 0);
+
+        }
 
         let mut update_triangle_list = self
             .active_set
@@ -276,6 +249,13 @@ impl BeamScenario {
             seed,
         );
 
+        // for i in 0..ROW {
+        //     p.verts[DIM * i + 1] -= 1.0;
+        // }
+        // // for i in 0..ROW {
+        // //     p.verts[DIM * (i+ROW) + 1] -= 0.5;
+        // // }
+
         // init velocity
         for i in 0..COL {
             let x = p.verts[DIM * (i * ROW) + 1];
@@ -296,9 +276,6 @@ impl BeamScenario {
         let mass = DMatrix::from_diagonal(&p.masss) / (DT * DT);
 
         let init_hessian = p.elastic_hessian(&p.verts, &energy, modi);
-        let csc_init_hessian = CscMatrix::from(&(&init_hessian + &mass));
-        // println!("{}",csc_init_hessian.nnz());
-        let csc_decom = CscCholesky::factor(&csc_init_hessian).unwrap();
 
         let mut old_hessian_list = Vec::<SMatrix<f64, CO_NUM, CO_NUM>>::new();
         for i in 0..p.n_prims {
@@ -321,7 +298,6 @@ impl BeamScenario {
             beam: p,
             x_tao: DVector::<f64>::zeros(1),
             g_vec,
-            csc_decom,
             active_set: std::collections::HashSet::<usize>::new(),
             hessian_list: old_hessian_list,
             init_hessian,
@@ -331,7 +307,7 @@ impl BeamScenario {
             active_set_epi: ACTIVE_SET_EPI,
             n_fixed: ROW,
             modification: modi,
-            first_flag: true,
+            first_flag:true,
         };
         scenario
     }
