@@ -29,6 +29,7 @@ pub struct BeamScenario {
     active_set_epi: f64,
     n_fixed: usize,
     modification: HessianModification,
+    first_flag: bool,
 }
 impl BeamScenario {
     fn inertia_apply(&self, x: &DVector<f64>) -> f64 {
@@ -101,6 +102,20 @@ impl Problem for BeamScenario {
     }
 
     fn hessian_mut(&mut self, x: &DVector<f64>) -> (Option<Self::HessianType>, usize) {
+        if self.first_flag == true {
+            let mut res = &self.init_hessian + self.inertia_hessian(x);
+            let mut slice = res.index_mut((0..self.n_fixed * DIM, self.n_fixed * DIM..));
+            for i in slice.iter_mut() {
+                *i = 0.0;
+            }
+            let mut slice = res.index_mut((self.n_fixed * DIM.., 0..self.n_fixed * DIM));
+            for i in slice.iter_mut() {
+                *i = 0.0;
+            }
+            self.first_flag = false;
+            return (Some(CsrMatrix::from(&res)), 0);
+        }
+
         let hes = self.hessian(x).unwrap();
         let csc_hes = CscMatrix::from(&hes);
         let csc_data = csc_hes.csc_data();
@@ -211,6 +226,7 @@ impl ScenarioProblem for BeamScenario {
     #[inline]
     fn frame_end(&mut self) {
         self.frame += 1;
+        self.first_flag = true;
     }
 }
 
@@ -259,13 +275,6 @@ impl BeamScenario {
             uniform,
             seed,
         );
-
-        // for i in 0..ROW {
-        //     p.verts[DIM * i + 1] -= 1.0;
-        // }
-        // // for i in 0..ROW {
-        // //     p.verts[DIM * (i+ROW) + 1] -= 0.5;
-        // // }
 
         // init velocity
         for i in 0..COL {
@@ -322,6 +331,7 @@ impl BeamScenario {
             active_set_epi: ACTIVE_SET_EPI,
             n_fixed: ROW,
             modification: modi,
+            first_flag: true,
         };
         scenario
     }
