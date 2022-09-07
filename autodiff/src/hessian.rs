@@ -8,10 +8,10 @@ use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
 use crate::{MyLog, MyScalar};
 #[derive(Clone, PartialEq, Debug, Copy)]
 pub struct Hessian<const N: usize> {
-    value: f64,
-    gradient: SVector<f64, N>,
+    pub value: f64,
+    pub gradient: SVector<f64, N>,
     //  !!!IMPORTANT: only half of hessian
-    hessian: SMatrix<f64, N, N>,
+    pub hessian: SMatrix<f64, N, N>,
 }
 
 impl<const N: usize> Hessian<N> {

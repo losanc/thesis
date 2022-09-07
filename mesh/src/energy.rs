@@ -17,7 +17,10 @@ pub trait Energy<const L: usize, const D: usize> {
             + Copy
             + MyLog
             + Mul<f64, Output = T>
-            + Sub<f64, Output = T>;
+            + Sub<f64, Output = T>
+            + std::fmt::Display;
+    fn mu(&self) -> f64;
+    fn lambda(&self) -> f64;
 }
 
 pub struct StVenantVirchhoff<const DIM: usize> {
@@ -55,6 +58,14 @@ impl Energy<6, 2> for StVenantVirchhoff<2> {
         let ene = ene * (T::one() * size);
         ene
     }
+
+    fn mu(&self) -> f64 {
+        self.mu
+    }
+
+    fn lambda(&self) -> f64 {
+        self.lambda
+    }
 }
 
 impl Energy<12, 3> for StVenantVirchhoff<3> {
@@ -89,6 +100,14 @@ impl Energy<12, 3> for StVenantVirchhoff<3> {
         let ene = ene * (T::one() * size);
         ene
     }
+
+    fn mu(&self) -> f64 {
+        self.mu
+    }
+
+    fn lambda(&self) -> f64 {
+        self.lambda
+    }
 }
 #[derive(Debug)]
 pub struct NeoHookean<const DIM: usize> {
@@ -108,7 +127,8 @@ impl Energy<6, 2> for NeoHookean<2> {
             + Copy
             + MyLog
             + Mul<f64, Output = T>
-            + Sub<f64, Output = T>,
+            + Sub<f64, Output = T>
+            + std::fmt::Display,
     {
         let mat = nalgebra::matrix![
             vec[4]-vec[0], vec[2]-vec[0];
@@ -126,10 +146,19 @@ impl Energy<6, 2> for NeoHookean<2> {
         // invertion test
         // assert!(i3 > 0.0)
         let i3 = i3 * i3;
+
         let logi3 = i3.myln();
         let ene = (i1 - logi3 - 2.0) * (self.mu / 2.0) + logi3 * logi3 * (self.lambda / 8.0);
         let ene = ene * (T::one() * size);
         ene
+    }
+
+    fn mu(&self) -> f64 {
+        self.mu
+    }
+
+    fn lambda(&self) -> f64 {
+        self.lambda
     }
 }
 
@@ -170,5 +199,13 @@ impl Energy<12, 3> for NeoHookean<3> {
         let ene = (i1 - logi3 - 3.0) * (self.mu / 2.0) + logi3 * logi3 * (self.lambda / 8.0);
         let ene = ene * (T::one() * size);
         ene
+    }
+
+    fn mu(&self) -> f64 {
+        self.mu
+    }
+
+    fn lambda(&self) -> f64 {
+        self.lambda
     }
 }

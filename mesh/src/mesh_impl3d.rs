@@ -198,6 +198,8 @@ impl Mesh3d {
                     }
                     small_hessian = eigendecom.recompose();
                 }
+                HessianModification::InternalRemove => todo!(),
+                HessianModification::InternalFlip => todo!(),
             }
             for i in 0..12 {
                 for j in 0..12 {
@@ -242,6 +244,8 @@ impl Mesh3d {
                 }
                 return eigendecomposition.recompose();
             }
+            HessianModification::InternalRemove => todo!(),
+            HessianModification::InternalFlip => todo!(),
         }
     }
 

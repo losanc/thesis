@@ -5,6 +5,7 @@ use nalgebra::DMatrix;
 use nalgebra::DVector;
 use nalgebra::SMatrix;
 use nalgebra::SVector;
+use num::Zero;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -74,14 +75,14 @@ impl Mesh2d {
         vert_vec: SVector<f64, 6>,
         modification: HessianModification,
     ) -> SMatrix<f64, 6, 6> {
-        let energy: Hessian<6> = self.prim_energy(i, energy, vert_vec);
+        let energy_value: Hessian<6> = self.prim_energy(i, energy, vert_vec);
 
         match modification {
             HessianModification::NoModification => {
-                return energy.hessian();
+                return energy_value.hessian();
             }
             HessianModification::RemoveMinusEigenvalues => {
-                let small_hessian = energy.hessian();
+                let small_hessian = energy_value.hessian();
 
                 let mut eigendecomposition = small_hessian.symmetric_eigen();
                 for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
@@ -92,7 +93,7 @@ impl Mesh2d {
                 return eigendecomposition.recompose();
             }
             HessianModification::FlipMinusEigenvalues => {
-                let small_hessian = energy.hessian();
+                let small_hessian = energy_value.hessian();
 
                 let mut eigendecomposition = small_hessian.symmetric_eigen();
                 for eigenvalue in eigendecomposition.eigenvalues.iter_mut() {
@@ -102,6 +103,83 @@ impl Mesh2d {
                 }
                 return eigendecomposition.recompose();
             }
+            HessianModification::InternalRemove => {
+                let vert_gradient_vec = Hessian::<6>::as_myscalar_vec(vert_vec);
+                    let inv_mat = self.ma_invs[i];
+                    let inv_mat = Hessian::<6>::as_constant_mat(inv_mat);
+                    let square = self.volumes[i];
+                    let mat = nalgebra::matrix![
+                        vert_gradient_vec[4]-vert_gradient_vec[0], vert_gradient_vec[2]-vert_gradient_vec[0];
+                        vert_gradient_vec[5]-vert_gradient_vec[1], vert_gradient_vec[3]-vert_gradient_vec[1];
+                    ];
+                    let matrix_f = mat * inv_mat;
+                    println!("{matrix_f}");
+                    let mut partial_f_partial_x = SMatrix::<f64, 6, 4>::zeros();
+
+                    partial_f_partial_x
+                        .column_mut(0)
+                        .copy_from(&matrix_f[(0, 0)].gradient);
+                    partial_f_partial_x
+                        .column_mut(1)
+                        .copy_from(&matrix_f[(1, 0)].gradient);
+
+                    partial_f_partial_x
+                        .column_mut(2)
+                        .copy_from(&matrix_f[(0, 1)].gradient);
+                    partial_f_partial_x
+                        .column_mut(3)
+                        .copy_from(&matrix_f[(1, 1)].gradient);
+
+                    let mut matrix_f_clone = nalgebra::matrix![
+                        Hessian::<4>::zero(),Hessian::<4>::zero();
+                        Hessian::<4>::zero(),Hessian::<4>::zero();
+                    ];
+
+                    matrix_f_clone[(0, 0)].value = matrix_f[(0, 0)].value;
+                    matrix_f_clone[(1, 0)].value = matrix_f[(1, 0)].value;
+                    matrix_f_clone[(0, 1)].value = matrix_f[(0, 1)].value;
+                    matrix_f_clone[(1, 1)].value = matrix_f[(1, 1)].value;
+
+                    matrix_f_clone[(0, 0)].gradient[0] = 1.0;
+                    matrix_f_clone[(1, 0)].gradient[1] = 1.0;
+                    matrix_f_clone[(0, 1)].gradient[2] = 1.0;
+                    matrix_f_clone[(1, 1)].gradient[3] = 1.0;
+
+                    let i1 = matrix_f_clone.transpose() * matrix_f_clone;
+                    let i1 = i1.trace();
+                    // let i2=  ?`
+                    // Is i2 used in formula?
+
+                    // i3 = matrix_f.determinate()
+                    let i3 = matrix_f_clone[(0, 0)] * matrix_f_clone[(1, 1)]
+                        - matrix_f_clone[(0, 1)] * matrix_f_clone[(1, 0)];
+
+                    // invertion test
+                    // assert!(i3 > 0.0)
+                    let i3 = i3 * i3;
+
+                    let logi3 = autodiff::MyLog::myln(i3);
+
+                    let ene = (i1 - logi3 - 2.0) * (energy.mu() / 2.0)
+                        + logi3 * logi3 * (energy.lambda() / 8.0);
+                    let ene = ene * (<Hessian<4> as num::One>::one() * square);
+                    let partial_phi_partial_f_square = ene.hessian();
+
+                    let mut eigendecom = partial_phi_partial_f_square.symmetric_eigen();
+                    for eigenvalue in eigendecom.eigenvalues.iter_mut() {
+                        if *eigenvalue < 0.0 {
+                            *eigenvalue = 0.0;
+                        }
+                    }
+                    let projected_partial_phi_partial_f_square = eigendecom.recompose();
+                    let small_hessian = &partial_f_partial_x
+                        * projected_partial_phi_partial_f_square
+                        * partial_f_partial_x.transpose();
+
+                    return small_hessian;
+
+            },
+            HessianModification::InternalFlip => todo!(),
         }
     }
 
@@ -168,11 +246,14 @@ impl Mesh2d {
                 .iter_mut()
                 .zip(indices.iter())
                 .for_each(|(g_i, i)| *g_i = x[*i]);
-            let energy: Hessian<6> = self.prim_energy(i, energy, vert_vec);
             let small_hessian;
             match modification {
-                HessianModification::NoModification => small_hessian = energy.hessian(),
+                HessianModification::NoModification => {
+                    let energy: Hessian<6> = self.prim_energy(i, energy, vert_vec);
+                    small_hessian = energy.hessian();
+                }
                 HessianModification::RemoveMinusEigenvalues => {
+                    let energy: Hessian<6> = self.prim_energy(i, energy, vert_vec);
                     let hessian = energy.hessian();
                     let mut eigendecom = hessian.symmetric_eigen();
                     for eigenvalue in eigendecom.eigenvalues.iter_mut() {
@@ -183,6 +264,7 @@ impl Mesh2d {
                     small_hessian = eigendecom.recompose();
                 }
                 HessianModification::FlipMinusEigenvalues => {
+                    let energy: Hessian<6> = self.prim_energy(i, energy, vert_vec);
                     let hessian = energy.hessian();
                     let mut eigendecom = hessian.symmetric_eigen();
                     for eigenvalue in eigendecom.eigenvalues.iter_mut() {
@@ -191,6 +273,152 @@ impl Mesh2d {
                         }
                     }
                     small_hessian = eigendecom.recompose();
+                }
+                HessianModification::InternalRemove => {
+                    let vert_gradient_vec = Hessian::<6>::as_myscalar_vec(vert_vec);
+                    let inv_mat = self.ma_invs[i];
+                    let inv_mat = Hessian::<6>::as_constant_mat(inv_mat);
+                    let square = self.volumes[i];
+                    let mat = nalgebra::matrix![
+                        vert_gradient_vec[4]-vert_gradient_vec[0], vert_gradient_vec[2]-vert_gradient_vec[0];
+                        vert_gradient_vec[5]-vert_gradient_vec[1], vert_gradient_vec[3]-vert_gradient_vec[1];
+                    ];
+                    let matrix_f = mat * inv_mat;
+                    println!("{matrix_f}");
+                    let mut partial_f_partial_x = SMatrix::<f64, 6, 4>::zeros();
+
+                    partial_f_partial_x
+                        .column_mut(0)
+                        .copy_from(&matrix_f[(0, 0)].gradient);
+                    partial_f_partial_x
+                        .column_mut(1)
+                        .copy_from(&matrix_f[(1, 0)].gradient);
+
+                    partial_f_partial_x
+                        .column_mut(2)
+                        .copy_from(&matrix_f[(0, 1)].gradient);
+                    partial_f_partial_x
+                        .column_mut(3)
+                        .copy_from(&matrix_f[(1, 1)].gradient);
+
+                    let mut matrix_f_clone = nalgebra::matrix![
+                        Hessian::<4>::zero(),Hessian::<4>::zero();
+                        Hessian::<4>::zero(),Hessian::<4>::zero();
+                    ];
+
+                    matrix_f_clone[(0, 0)].value = matrix_f[(0, 0)].value;
+                    matrix_f_clone[(1, 0)].value = matrix_f[(1, 0)].value;
+                    matrix_f_clone[(0, 1)].value = matrix_f[(0, 1)].value;
+                    matrix_f_clone[(1, 1)].value = matrix_f[(1, 1)].value;
+
+                    matrix_f_clone[(0, 0)].gradient[0] = 1.0;
+                    matrix_f_clone[(1, 0)].gradient[1] = 1.0;
+                    matrix_f_clone[(0, 1)].gradient[2] = 1.0;
+                    matrix_f_clone[(1, 1)].gradient[3] = 1.0;
+
+                    let i1 = matrix_f_clone.transpose() * matrix_f_clone;
+                    let i1 = i1.trace();
+                    // let i2=  ?`
+                    // Is i2 used in formula?
+
+                    // i3 = matrix_f.determinate()
+                    let i3 = matrix_f_clone[(0, 0)] * matrix_f_clone[(1, 1)]
+                        - matrix_f_clone[(0, 1)] * matrix_f_clone[(1, 0)];
+
+                    // invertion test
+                    // assert!(i3 > 0.0)
+                    let i3 = i3 * i3;
+
+                    let logi3 = autodiff::MyLog::myln(i3);
+
+                    let ene = (i1 - logi3 - 2.0) * (energy.mu() / 2.0)
+                        + logi3 * logi3 * (energy.lambda() / 8.0);
+                    let ene = ene * (<Hessian<4> as num::One>::one() * square);
+                    let partial_phi_partial_f_square = ene.hessian();
+
+                    let mut eigendecom = partial_phi_partial_f_square.symmetric_eigen();
+                    for eigenvalue in eigendecom.eigenvalues.iter_mut() {
+                        if *eigenvalue < 0.0 {
+                            *eigenvalue = 0.0;
+                        }
+                    }
+                    let projected_partial_phi_partial_f_square = eigendecom.recompose();
+                    small_hessian = &partial_f_partial_x
+                        * projected_partial_phi_partial_f_square
+                        * partial_f_partial_x.transpose();
+                }
+                HessianModification::InternalFlip => {
+                    let vert_gradient_vec = Hessian::<6>::as_myscalar_vec(vert_vec);
+                    let inv_mat = self.ma_invs[i];
+                    let inv_mat = Hessian::<6>::as_constant_mat(inv_mat);
+                    let square = self.volumes[i];
+                    let mat = nalgebra::matrix![
+                        vert_gradient_vec[4]-vert_gradient_vec[0], vert_gradient_vec[2]-vert_gradient_vec[0];
+                        vert_gradient_vec[5]-vert_gradient_vec[1], vert_gradient_vec[3]-vert_gradient_vec[1];
+                    ];
+                    let matrix_f = mat * inv_mat;
+                    println!("{matrix_f}");
+                    let mut partial_f_partial_x = SMatrix::<f64, 6, 4>::zeros();
+
+                    partial_f_partial_x
+                        .column_mut(0)
+                        .copy_from(&matrix_f[(0, 0)].gradient);
+                    partial_f_partial_x
+                        .column_mut(1)
+                        .copy_from(&matrix_f[(1, 0)].gradient);
+
+                    partial_f_partial_x
+                        .column_mut(2)
+                        .copy_from(&matrix_f[(0, 1)].gradient);
+                    partial_f_partial_x
+                        .column_mut(3)
+                        .copy_from(&matrix_f[(1, 1)].gradient);
+
+                    let mut matrix_f_clone = nalgebra::matrix![
+                        Hessian::<4>::zero(),Hessian::<4>::zero();
+                        Hessian::<4>::zero(),Hessian::<4>::zero();
+                    ];
+
+                    matrix_f_clone[(0, 0)].value = matrix_f[(0, 0)].value;
+                    matrix_f_clone[(1, 0)].value = matrix_f[(1, 0)].value;
+                    matrix_f_clone[(0, 1)].value = matrix_f[(0, 1)].value;
+                    matrix_f_clone[(1, 1)].value = matrix_f[(1, 1)].value;
+
+                    matrix_f_clone[(0, 0)].gradient[0] = 1.0;
+                    matrix_f_clone[(1, 0)].gradient[1] = 1.0;
+                    matrix_f_clone[(0, 1)].gradient[2] = 1.0;
+                    matrix_f_clone[(1, 1)].gradient[3] = 1.0;
+
+                    let i1 = matrix_f_clone.transpose() * matrix_f_clone;
+                    let i1 = i1.trace();
+                    // let i2=  ?`
+                    // Is i2 used in formula?
+
+                    // i3 = matrix_f.determinate()
+                    let i3 = matrix_f_clone[(0, 0)] * matrix_f_clone[(1, 1)]
+                        - matrix_f_clone[(0, 1)] * matrix_f_clone[(1, 0)];
+
+                    // invertion test
+                    // assert!(i3 > 0.0)
+                    let i3 = i3 * i3;
+
+                    let logi3 = autodiff::MyLog::myln(i3);
+
+                    let ene = (i1 - logi3 - 2.0) * (energy.mu() / 2.0)
+                        + logi3 * logi3 * (energy.lambda() / 8.0);
+                    let ene = ene * (<Hessian<4> as num::One>::one() * square);
+                    let partial_phi_partial_f_square = ene.hessian();
+
+                    let mut eigendecom = partial_phi_partial_f_square.symmetric_eigen();
+                    for eigenvalue in eigendecom.eigenvalues.iter_mut() {
+                        if *eigenvalue < 0.0 {
+                            *eigenvalue *= -1.0;
+                        }
+                    }
+                    let projected_partial_phi_partial_f_square = eigendecom.recompose();
+                    small_hessian = &partial_f_partial_x
+                        * projected_partial_phi_partial_f_square
+                        * partial_f_partial_x.transpose();
                 }
             }
             for i in 0..6 {

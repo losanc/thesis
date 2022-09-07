@@ -47,4 +47,6 @@ pub enum HessianModification {
     NoModification,
     RemoveMinusEigenvalues,
     FlipMinusEigenvalues,
+    InternalRemove,
+    InternalFlip,
 }
