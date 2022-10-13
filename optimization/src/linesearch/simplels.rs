@@ -16,7 +16,7 @@ impl<P: Problem> LineSearch<P> for SimpleLineSearch {
         if check <= 0.0 {
             scalar = -1.0
         }
-        while pro.apply(current) + self.epi < pro.apply(&(current - scalar * direction)) {
+        while pro.apply(current) + 1e-4*scalar*check < pro.apply(&(current - scalar * direction)) {
             scalar *= self.alpha;
             if scalar.abs() < self.tol {
                 break;
