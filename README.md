@@ -9,7 +9,7 @@ cargo run --release --example beam   --features log 1e3 0.33 0.01 1e3 20 80 1.0 
 ```
 
 this is the beam simulation in the thesis, and you can change the parameters as you want
-
+```
 1e3: Young's modulus
 0.33: Poisson's ratio
 0.01: time step
@@ -27,6 +27,7 @@ no: hessian modifications, options are no(no modification), flip(flip the negati
 10: precision of float number in the file name (doesn't matter very much)
 true: uniform mesh or non-uniform
 20: random seed
+```
 
 after that, you will see the log files in 'output/log', each folder is one simulation with the same physical parameters. For all the files inside one folder, are different epsilon and k
 
@@ -38,7 +39,7 @@ This is another circle simulation in the thesis
 cargo run --example circle  --release --features log 1e4 0.33 0.01  1e3 1 25  1.0  0.0 0  name  nothing  20 no 10
 ```
  
- 
+```
 1e4: Young's modulus
 0.33: Poisson's ratio
 0.01: time step
@@ -56,4 +57,4 @@ nothing: comment in the log file
 20: number of frames
 no: hessian modification
 10: precision of float number in the file name (not very important)
-
+```
